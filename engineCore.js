@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.4.0 (Feature: Manual VIX Crush Override)
+ * @version     18.5.1 (Fix: Expense categorization based on UI Special selection)
  * @file        engineCore.js
  * @description Core simulation loop. Integrated Two-Track engine and NAV-based survival trigger.
  */
@@ -117,7 +117,7 @@ function simulateScenario(scenario, settings, label = "") {
                 crashOverride = -(crash.drop) / 100;
                 if (crash.drop > 0) {
                     yearData.isCrashYear = true;
-                    yearData.strategyState = "📉 Crash"; // Crash overwrites VIX label if both happen
+                    yearData.strategyState = "📉 Crash"; 
                 } else {
                     yearData.isCrashYear = false;
                     yearData.strategyState = "📈 Rebound";
@@ -132,7 +132,6 @@ function simulateScenario(scenario, settings, label = "") {
         yearData.dividends.spouse = spouseGrowthResult.totalDiv;
         yearData.dividends.total = userGrowthResult.totalDiv + spouseGrowthResult.totalDiv;
         
-        // Save computed WHT for accurate Net cashflow in withdrawals
         yearData.dividends.userWht = userGrowthResult.totalDivWht;
         yearData.dividends.spouseWht = spouseGrowthResult.totalDivWht;
         yearData.dividends.totalWht = userGrowthResult.totalDivWht + spouseGrowthResult.totalDivWht;
@@ -161,15 +160,7 @@ function simulateScenario(scenario, settings, label = "") {
         step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouseBirthYear, currentUserAssets, currentSpouseAssets);
         yearData.expenses = (yearData.expenses || 0) + (yearData.expenses_thai_tax || 0);
 
-        // --- 4. Perform Withdrawals ---
-        let wdInfo = { depleted: false, total: 0 };
-        if (typeof step4_PerformWithdrawals === 'function') {
-            wdInfo = step4_PerformWithdrawals(yearData, currentUserAssets, currentSpouseAssets, hasSpouse, settings);
-        }
-        
-        yearData.withdrawals.total = wdInfo.total || 0;
-
-        // --- 5. Calculate Taxes ---
+        // --- 4. Calculate Taxes FIRST (Accurate Deduction Pipeline) ---
         let userTaxInfo = { totalTax: 0, tax_can: 0, tax_thai: 0 };
         if (typeof step5_CalculateTaxes === 'function') {
             userTaxInfo = step5_CalculateTaxes(yearData.user, scenario, settings, 'user');
@@ -182,13 +173,19 @@ function simulateScenario(scenario, settings, label = "") {
             yearData.spouse.tax = spouseTaxInfo;
         }
 
-        // Add Dividend WHT to total tax burden
         yearData.taxPayable = userTaxInfo.totalTax + spouseTaxInfo.totalTax + yearData.dividends.totalWht;
         yearData.taxPayable_can = userTaxInfo.tax_can + spouseTaxInfo.tax_can + yearData.dividends.totalWht;
         yearData.taxPayable_thai = userTaxInfo.tax_thai + spouseTaxInfo.tax_thai;
 
+        // --- 5. Perform Withdrawals (Sell accurate Shortfall) ---
+        let wdInfo = { depleted: false, total: 0 };
+        if (typeof step4_PerformWithdrawals === 'function') {
+            wdInfo = step4_PerformWithdrawals(yearData, currentUserAssets, currentSpouseAssets, hasSpouse, settings);
+        }
+        
+        yearData.withdrawals.total = wdInfo.withdrawals ? wdInfo.withdrawals.total : (yearData.withdrawals.total || 0);
+
         // ✅ Reinvest Logic (1st Priority Dynamic Asset)
-        // Mathematically accurate: Total Cash In (Gross) - Total Cash Out (Exp + WHT Taxes) = Net Cashflow
         const totalCashOut = yearData.expenses + yearData.taxPayable; 
         const totalCashIn = yearData.income.total + yearData.withdrawals.total;
         const netCashflow = totalCashIn - totalCashOut;
@@ -315,11 +312,12 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
     const currentUserAge = Number(yearData.userAge);
     
     const allItems = scenario.user?.otherIncomes || [];
-    let thaiExpenses = 0;
+    let baseLivingExpenses = 0;
+    let specialExpenses = 0;
     let overseasExpenses = 0;
 
     for (const item of allItems) {
-         if (item.type !== 'expense_malaysia' && item.type !== 'expense_thai' && item.type !== 'expense_overseas' && item.type !== 'expense_living') continue;
+         if (item.type !== 'expense_malaysia' && item.type !== 'expense_thai' && item.type !== 'expense_overseas' && item.type !== 'expense_living' && item.type !== 'expense_special') continue;
          const startAge = Number(item.startAge) || 0;
          const endAge = (Number(item.endAge) > 0) ? Number(item.endAge) : 110;
          const amount = Number(item.amount) || 0;
@@ -336,12 +334,18 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
          if (isActive) {
              const yearsSinceBase = Math.max(0, currentYear - baseYear);
              const inflatedAmount = amount * Math.pow(1 + cola, yearsSinceBase);
-             if (item.type === 'expense_overseas') overseasExpenses += inflatedAmount;
-             else thaiExpenses += inflatedAmount;
+             
+             if (item.type === 'expense_overseas') {
+                 overseasExpenses += inflatedAmount;
+             } else if (item.type === 'expense_special') {
+                 specialExpenses += inflatedAmount;
+             } else {
+                 baseLivingExpenses += inflatedAmount;
+             }
          }
     }
     
-    yearData.expenses = thaiExpenses + overseasExpenses;
+    yearData.expenses = baseLivingExpenses + specialExpenses + overseasExpenses;
 
     // --- 🚨 SURVIVAL TIGHTENING RULE (JEPQ NAV) ---
     const cw = settings.survivalConfig || {};
@@ -362,8 +366,8 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
         if (navDropped) {
             const yearsSinceBase = Math.max(0, currentYear - baseYear);
             const inflatedTightened = tightenedPv * Math.pow(1 + (settings.cola || 0.025), yearsSinceBase);
-            yearData.expenses = inflatedTightened;
-            yearData.isSurvivalTightened = true; // Mark for UI
+            yearData.expenses = inflatedTightened + specialExpenses + overseasExpenses;
+            yearData.isSurvivalTightened = true; 
         }
     }
 }
