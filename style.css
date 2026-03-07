@@ -1,0 +1,698 @@
+/* Google Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap');
+
+/* --- CSS 변수 정의 (색상 및 스타일 관리) --- */
+:root {
+    --font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+    /* Light Mode Colors */
+    --bg-color: #f8f9fa;
+    --surface-color: #ffffff;
+    --text-primary: #212529; /* Standard black */
+    --text-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --primary-color: #007bff;
+    --primary-hover-color: #0056b3;
+    --secondary-color: #6c757d;
+    --secondary-hover-color: #5a6268;
+    --danger-color: #dc3545;
+    --success-color: #28a745; /* Standard Green */
+    --bright-success-color: #20c997; /* Brighter Green for Income text */
+    --success-hover-color: #218838;
+    --disabled-color: #ced4da;
+    --shadow-color: rgba(0, 0, 0, 0.05);
+    --chart-line-a: #007bff;
+    --chart-line-b: #ff7f0e;
+    --chart-grid-color: #e9ecef;
+    --chart-tooltip-bg: rgba(0, 0, 0, 0.8);
+    --chart-tooltip-text: #ffffff;
+    
+    /* *** MONTE CARLO (v5.0.0) *** */
+    --mc-color: #fd7e14; /* Orange */
+    --mc-hover-color: #d96a0b;
+    --mc-area-color-a-light: rgba(0, 123, 255, 0.1);
+    --mc-area-color-a-dark: rgba(0, 123, 255, 0.2);
+    --mc-area-color-b-light: rgba(255, 127, 14, 0.1);
+    --mc-area-color-b-dark: rgba(255, 127, 14, 0.2);
+}
+
+/* --- 다크 모드 변수 --- */
+body.dark-mode {
+    --bg-color: #1a1a1a;
+    --surface-color: #2c2c2c;
+    --text-primary: #e9ecef; /* Light grey/white for dark mode */
+    --text-secondary: #adb5bd;
+    --border-color: #495057;
+    --primary-color: #0d6efd;
+    --primary-hover-color: #3d8bfd;
+    --success-color: #198754; /* Darker green */
+    --bright-success-color: #63e6be; /* Brighter Green for Income text in dark mode */
+    --success-hover-color: #157347;
+    --danger-color: #f06571; /* Slightly brighter red for dark mode */
+    --disabled-color: #495057;
+    --shadow-color: rgba(0, 0, 0, 0.2);
+    --chart-line-a: #0d6efd;
+    --chart-line-b: #fd7e14;
+    --chart-grid-color: #495057;
+    --chart-tooltip-bg: rgba(255, 255, 255, 0.9);
+    --chart-tooltip-text: #1a1a1a;
+    
+    /* *** MONTE CARLO (v5.0.0) *** */
+    --mc-color: #ff9234; /* Lighter Orange */
+    --mc-hover-color: #fd7e14;
+    --mc-area-color-a-light: rgba(13, 110, 253, 0.15);
+    --mc-area-color-a-dark: rgba(13, 110, 253, 0.25);
+    --mc-area-color-b-light: rgba(253, 126, 20, 0.15);
+    --mc-area-color-b-dark: rgba(253, 126, 20, 0.25);
+}
+
+/* --- 기본 및 레이아웃 스타일 --- */
+body {
+    font-family: var(--font-family);
+    line-height: 1.6;
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    margin: 0;
+    padding: 20px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: var(--surface-color);
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px var(--shadow-color);
+    transition: background-color 0.3s;
+    border: 1px solid var(--border-color);
+}
+
+header {
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1.5rem;
+    margin-bottom: 0;
+}
+
+.header-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+h1 { font-size: 2.25rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem; }
+h2 { font-size: 1.75rem; font-weight: 600; color: var(--text-primary); border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; display: inline-block; margin-top: 2rem; }
+h3 { font-size: 1.25rem; font-weight: 600; color: var(--text-primary); margin-top: 1.5rem; }
+p { color: var(--text-secondary); }
+
+/* --- 폼 요소 스타일 --- */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+}
+fieldset {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 0;
+    background-color: var(--bg-color);
+}
+legend {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    padding: 0 0.5rem;
+}
+.form-group { margin-bottom: 1rem; }
+.form-group:last-child { margin-bottom: 0; }
+label { display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-secondary); }
+
+input[type="number"], select, input[type="text"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    color: var(--text-primary);
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+input:focus, select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+/* *** MONTE CARLO (v5.0.0) *** */
+.stdev-grid .form-group {
+    margin-bottom: 0;
+}
+.stdev-grid label {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+.stdev-grid input[type="number"] {
+    padding: 0.5rem;
+    font-size: 0.9em;
+    background-color: var(--bg-color);
+}
+
+/* [NEW] Asset Card Styles for Responsive UI */
+.asset-input-group {
+    background: var(--bg-color);
+    border-radius: 8px;
+    padding: 1rem 0;
+}
+.asset-owner-title {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    padding-left: 0.5rem;
+}
+.asset-card {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+.asset-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+.asset-name-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.asset-name-group label {
+    margin: 0;
+    font-size: 0.9rem;
+}
+.asset-name-group input {
+    font-weight: bold;
+    width: 150px;
+    padding: 0.4rem;
+}
+.btn-remove-asset {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.asset-card-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 0.75rem;
+}
+.asset-input-item {
+    display: flex;
+    flex-direction: column;
+}
+.asset-input-item label {
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+}
+.asset-input-item input, .asset-input-item select {
+    padding: 0.4rem;
+    font-size: 0.85rem;
+}
+
+/* Responsive Adjustment for Asset Card */
+@media (max-width: 768px) {
+    .asset-card-body {
+        grid-template-columns: 1fr 1fr; /* 2 columns on mobile */
+    }
+    .asset-name-group {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    .asset-name-group input {
+        width: 100%;
+    }
+    .asset-card-header {
+        align-items: flex-end;
+    }
+}
+
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 0.2s, transform 0.1s;
+}
+button:hover { background-color: var(--primary-hover-color); transform: translateY(-1px); }
+button:disabled {
+    background-color: var(--disabled-color);
+    cursor: not-allowed;
+    transform: none;
+}
+button:disabled:hover { background-color: var(--disabled-color); }
+.btn-secondary { background-color: var(--secondary-color); }
+.btn-secondary:hover { background-color: var(--secondary-hover-color); }
+
+/* Main action buttons container style */
+.main-action-controls {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 1rem;
+    margin: 2rem 0;
+    flex-wrap: wrap;
+}
+
+#runAnalysisBtn {
+    width: auto;
+    min-width: 150px;
+    padding: 0.8rem 2rem;
+    font-size: 1.1rem;
+}
+#runOptimizationBtn {
+    width: auto;
+    min-width: 150px;
+    padding: 0.8rem 2rem;
+    font-size: 1.1rem;
+    background-color: var(--success-color);
+}
+#runOptimizationBtn:hover {
+    background-color: var(--success-hover-color);
+}
+#optimizer-loading-indicator {
+    text-align: center;
+    padding: 2rem;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+/* *** MONTE CARLO *** */
+#runMonteCarloBtn {
+    width: auto;
+    min-width: 180px;
+    padding: 0.8rem 1.5rem;
+    font-size: 1.1rem;
+    background-color: var(--mc-color);
+}
+#runMonteCarloBtn:hover {
+    background-color: var(--mc-hover-color);
+}
+#runMonteCarloBtn:disabled {
+    background-color: var(--disabled-color);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+#monteCarloRunsSelect {
+    width: auto;
+    min-width: 80px; 
+    padding: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.mc-group {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+}
+.mc-group > div {
+    display: flex;
+    flex-direction: column;
+}
+.mc-group > div label {
+    margin-bottom: 0.25rem;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+#lang-toggle { background-color: var(--secondary-color); font-size: 0.9rem; padding: 0.5rem 1rem; }
+#lang-toggle:hover { background-color: var(--secondary-hover-color); }
+
+#load-scenario-btn,
+#save-scenario-btn {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+}
+
+.future-value-display { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; height: 1.2em; }
+
+/* --- 다크 모드 토글 스위치 --- */
+.theme-switch-wrapper { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.theme-switch { display: inline-block; height: 24px; position: relative; width: 48px; }
+.theme-switch input { display:none; }
+.slider { background-color: #ccc; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; }
+.slider:before { background-color: #fff; bottom: 4px; content: ""; height: 16px; left: 4px; position: absolute; transition: .4s; width: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+input:checked + .slider { background-color: var(--primary-color); }
+input:checked + .slider:before { transform: translateX(24px); }
+.slider.round { border-radius: 24px; }
+.slider.round:before { border-radius: 50%; }
+
+/* --- 툴팁, 모달, 기타 UI 요소 --- */
+.tooltip { display: inline-block; background-color: var(--secondary-color); color: white; border-radius: 50%; width: 18px; height: 18px; text-align: center; font-size: 13px; line-height: 18px; cursor: help; position: relative; }
+.tooltip:hover::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background-color: #34495e; color: white; padding: 0.75rem; border-radius: 6px; width: 280px; text-align: left; font-size: 0.9rem; z-index: 10; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+.hidden { display: none !important; }
+
+.modal { position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+.modal-content { background-color: var(--surface-color); padding: 2.5rem; border: 1px solid var(--border-color); width: 90%; max-width: 600px; border-radius: 8px; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.close-button { color: #aaa; position: absolute; top: 1rem; right: 1.5rem; font-size: 28px; font-weight: bold; cursor: pointer; }
+.close-button:hover { color: var(--text-primary); }
+#income-list .income-item, #income-list_b .income-item { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); }
+
+#income-list .income-item > span,
+#income-list_b .income-item > span {
+    color: var(--bright-success-color);
+    font-weight: 500;
+}
+#income-list .income-item.expense-item > span,
+#income-list_b .income-item.expense-item > span {
+    color: var(--danger-color) !important;
+}
+
+.form-grid-modal { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.income-item button { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+button.edit-btn { background-color: var(--secondary-color); }
+button.edit-btn:hover { background-color: var(--secondary-hover-color); }
+button.delete-btn { background-color: var(--danger-color); }
+button.delete-btn:hover { background-color: #a71d2a; }
+
+/* --- 결과 섹션 --- */
+#break-even-result { margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-color); border-radius: 8px; }
+#break-even-text-result { font-size: 1.2rem; font-weight: 600; text-align: center; margin-bottom: 1.5rem; }
+#loading-indicator { text-align: center; padding: 2rem; font-size: 1.1rem; color: var(--text-secondary); }
+.spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: var(--primary-color); animation: spin 1s linear infinite; margin: 1rem auto; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+#additional-metrics-container { margin: 1.5rem auto; max-width: 800px; }
+#additional-metrics-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+#additional-metrics-table th, #additional-metrics-table td { border: 1px solid var(--border-color); padding: 10px; text-align: right; }
+#additional-metrics-table th { background-color: var(--bg-color); text-align: center; font-weight: 600; }
+#additional-metrics-table td:first-child { text-align: left; font-weight: 600; }
+#additional-metrics-table .metric-positive { font-weight: bold; color: var(--success-color); }
+#additional-metrics-table .metric-negative { font-weight: bold; color: var(--danger-color); }
+
+/* *** MONTE CARLO *** */
+#monte-carlo-results-container { margin-top: 2rem; border-top: 2px solid var(--primary-color); padding-top: 1rem; }
+#monte-carlo-results-container h3 { text-align: center; color: var(--text-primary); }
+#monte-carlo-results-table { width: 100%; max-width: 600px; margin: 1rem auto; border-collapse: collapse; font-size: 0.95rem; }
+#monte-carlo-results-table th, #monte-carlo-results-table td { border: 1px solid var(--border-color); padding: 10px; text-align: right; }
+#monte-carlo-results-table th { background-color: var(--bg-color); text-align: center; font-weight: 600; }
+#monte-carlo-results-table td:first-child { text-align: left; font-weight: 600; }
+
+.table-controls { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem; margin-bottom: 1rem; }
+.table-controls button { background-color: var(--secondary-color); }
+.table-controls button:hover { background-color: var(--secondary-hover-color); }
+
+#detailed-table-container-a,
+#detailed-table-container-b { overflow-x: auto; margin-top: 1rem; }
+
+#detailed-table-container-a table,
+#detailed-table-container-b table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.9rem; }
+
+#detailed-table-container-a th, #detailed-table-container-a td,
+#detailed-table-container-b th, #detailed-table-container-b td { border: 1px solid var(--border-color); padding: 10px 12px; text-align: right; white-space: nowrap; }
+
+#detailed-table-container-a th,
+#detailed-table-container-b th { background-color: var(--bg-color); font-weight: 600; position: sticky; top: 0; z-index: 1; }
+
+#detailed-table-container-a td:first-child, #detailed-table-container-a th:first-child,
+#detailed-table-container-b td:first-child, #detailed-table-container-b th:first-child { text-align: center; font-weight: 600; position: sticky; left: 0; background-color: var(--surface-color); z-index: 2; }
+
+#detailed-table-container-a th:first-child,
+#detailed-table-container-b th:first-child { z-index: 3; }
+
+
+/* ====================================================== */
+/* 탭 구조 스타일 */
+/* ====================================================== */
+.tab-nav { display: flex; border-bottom: 2px solid var(--border-color); margin-top: 1.5rem; }
+.tab-btn { padding: 0.8rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; background-color: transparent; border: none; color: var(--text-secondary); border-bottom: 3px solid transparent; border-radius: 0; transform: none; }
+.tab-btn:hover { background-color: var(--bg-color); color: var(--text-primary); transform: none; }
+.tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
+.tab-content-container { padding-top: 2rem; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+
+.form-grid-4-col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+}
+
+/* ====================================================== */
+/* 인출 전략 레이아웃 */
+/* ====================================================== */
+.strategy-section { margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid var(--border-color); display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between; }
+.strategy-section h2 { margin-top: 0; border-bottom: none; padding-bottom: 0; width: 100%; margin-bottom: 1rem; }
+.strategy-section p {
+    width: 100%;
+    margin-top: -0.5rem;
+    margin-bottom: 0.5rem;
+}
+.phase-item.fixed-phase { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 0; display: flex; flex-direction: column; gap: 1rem; flex: 1 1 300px; min-width: 280px; }
+.fixed-phase h3 { margin-top: 0; margin-bottom: 0.5rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); }
+.phase-settings { display: flex; flex-direction: column; gap: 0.75rem; }
+.withdrawal-order-section { border-left: none; padding-left: 0; border-top: 1px dashed var(--border-color); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.withdrawal-order-section h4 { margin-top: 0; margin-bottom: 0.5rem; color: var(--text-secondary); }
+.withdrawal-order-section .form-group { margin-bottom: 0; display: flex; align-items: center; gap: 0.5rem; }
+.withdrawal-order-section label { font-size: 0.9rem; margin-bottom: 0; flex-basis: 25px; text-align: right; }
+.withdrawal-order-section select { flex-grow: 1; }
+
+/* --- Footer --- */
+footer { border-top: 1px solid var(--border-color); margin-top: 3rem; padding-top: 1.5rem; text-align: center; color: var(--text-secondary); }
+.footer-credits { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+.footer-credits p { margin: 0.25rem 0; font-size: 0.9rem; }
+footer a { color: var(--primary-color); text-decoration: none; font-weight: 600; }
+footer a:hover { text-decoration: underline; }
+footer h3 { font-size: 1.1rem; color: var(--text-secondary); }
+footer p { font-size: 0.85rem; max-width: 800px; margin: 0.5rem auto; }
+
+/* --- Welcome Modal --- */
+#welcome-modal .modal-content h3 { margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.2rem; color: var(--primary-color); }
+#welcome-modal .modal-content p { margin-bottom: 1rem; line-height: 1.7; }
+#welcome-modal .modal-content strong { color: var(--text-primary); }
+#modal-lang-toggle { position: absolute; top: 1.5rem; left: 1.5rem; background-color: var(--secondary-color); font-size: 0.9rem; padding: 0.5rem 1rem; }
+#modal-lang-toggle:hover { background-color: var(--secondary-hover-color); }
+.agreement-section { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 10px; }
+.agreement-section label { margin-bottom: 0; font-size: 0.9rem; color: var(--text-primary); cursor: pointer; }
+.agreement-section input[type="checkbox"] { width: auto; flex-shrink: 0; }
+#agree-btn { width: 100%; margin-top: 1rem; padding: 0.8rem; background-color: var(--success-color); }
+#agree-btn:hover { background-color: var(--success-hover-color); }
+#agree-btn:disabled { background-color: var(--disabled-color); color: var(--text-secondary); }
+.shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+
+/* ====================================================== */
+/* Graph Styles */
+/* ====================================================== */
+#graph-container {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    height: 450px;
+    max-height: 500px;
+    position: relative;
+    box-sizing: border-box;
+}
+#graph-container h3 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+#results-chart {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+.axis path, .axis line {
+    fill: none;
+    stroke: var(--text-secondary);
+    shape-rendering: crispEdges;
+}
+.axis text {
+    fill: var(--text-secondary);
+    font-size: 0.85em;
+}
+.grid line {
+    stroke: var(--chart-grid-color);
+    stroke-opacity: 0.7;
+    shape-rendering: crispEdges;
+}
+.grid path {
+    stroke-width: 0;
+}
+.line {
+    fill: none;
+    stroke-width: 2.5px;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+.line-a { stroke: var(--chart-line-a); }
+.line-b { stroke: var(--chart-line-b); }
+.d3-tooltip {
+    position: absolute;
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 0.9em;
+    background: var(--chart-tooltip-bg);
+    color: var(--chart-tooltip-text);
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    white-space: pre;
+    z-index: 10;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.d3-tooltip strong { display: block; margin-bottom: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; }
+.d3-tooltip div { margin-top: 4px; }
+.d3-tooltip span { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; vertical-align: middle; }
+.d3-tooltip span.color-a { background-color: var(--chart-line-a); }
+.d3-tooltip span.color-b { background-color: var(--chart-line-b); }
+
+.focus-line {
+    fill: none;
+    stroke: var(--text-secondary);
+    stroke-width: 1px;
+    stroke-dasharray: 3,3;
+    opacity: 0;
+}
+
+/* Monte Carlo Graph Styles */
+#mc-graph-container-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+}
+.mc-graph-container {
+    padding: 1.5rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    height: 450px;
+    position: relative;
+    box-sizing: border-box;
+}
+.mc-graph-container h3 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+#mc-chart-a, #mc-chart-b {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+.mc-area-p10-p90-a { fill: var(--mc-area-color-a-light); }
+.mc-area-p25-p75-a { fill: var(--mc-area-color-a-dark); }
+.mc-area-p10-p90-b { fill: var(--mc-area-color-b-light); }
+.mc-area-p25-p75-b { fill: var(--mc-area-color-b-dark); }
+
+.crash-indicator-line {
+    stroke: var(--danger-color);
+    stroke-width: 2px;
+    stroke-dasharray: 5,5;
+    opacity: 0.7;
+}
+
+#optimizer-graph-container {
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    height: 450px;
+    max-height: 500px;
+    position: relative;
+    box-sizing: border-box;
+}
+#optimizer-graph-container h3 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+#optimizer-results-chart {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.optimizer-table-controls button {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    background-color: var(--secondary-color);
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.optimizer-table-controls button:hover {
+    background-color: var(--secondary-hover-color);
+}
+
+.summary {
+    font-weight: bold;
+    font-size: 1.1rem;
+    text-align: center;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: #212529;
+}
+.summary .positive {
+    color: var(--success-color);
+}
+
+@media (max-width: 992px) {
+    #mc-graph-container-area {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 768px) {
+    .container { padding: 1rem; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.5rem; }
+    .form-grid-modal { grid-template-columns: 1fr; }
+    .header-controls { flex-direction: column; gap: 1rem; }
+    #modal-lang-toggle { top: 1rem; left: 1rem; }
+    #graph-container, #optimizer-graph-container, .mc-graph-container { height: 350px; }
+}
