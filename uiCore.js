@@ -49,6 +49,7 @@ const translations = {
         incomeTypeLabel: "Type", incomeTypeIncome: "Income", incomeTypeExpense: "Expense",
         incomeTypePension: "Income: Pension (Malaysia Tax-Free)", incomeTypeOther: "Income: Other (Malaysia Tax-Free)",
         expenseTypeMalaysia: "Expense: Malaysia Living", 
+        expenseTypeSpecial: "Expense: Special (Exempt from Survival Rule)",
         expenseTypeOverseas: "Expense: Overseas",
         expenseTypeLiving: "Expense: Total Living Expense (CAD)",
         
