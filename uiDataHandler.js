@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.2.0 (Fix: JSON Load Array Reference Severing Bug)
+ * @version     16.3.0 (Fix: Unlimited Survival Tiers & Backward Compatibility)
  * @file        uiDataHandler.js
  * @description Manages data sync, save/load, and dynamic asset UI binding.
  */
@@ -15,6 +15,8 @@ let manualCrashesA = [];
 let manualCrashesB = [];
 let manualVixA = []; 
 let manualVixB = [];
+let survivalTiersA = [];
+let survivalTiersB = [];
 let isRestoring = false; // Flag to prevent auto-save/sync during load
 
 // --- Helper: ID Resolver for Inconsistent Scenario A Naming ---
@@ -24,7 +26,7 @@ function _resolveElementId(baseId, scenarioSuffix) {
     } else {
         const idsWithASuffix = [
             'isCouple', 'retirementAge', 
-            'survival_enable', 'survival_trigger', 'survival_expense'
+            'survival_enable'
         ];
         
         if (idsWithASuffix.includes(baseId)) {
@@ -66,7 +68,7 @@ function initializeScenarioData(scenarioSuffix) {
             'retirementAge', 'userBirthYear', 
             'spouseBirthYear', 
             'isCouple',
-            'survival_enable', 'survival_trigger', 'survival_expense'
+            'survival_enable'
         ];
 
         basicInputs.forEach(baseId => {
@@ -97,6 +99,7 @@ function initializeScenarioData(scenarioSuffix) {
 
     _setupCrashListLogic(s);
     _setupVixListLogic(s);
+    _setupSurvivalTierLogic(s);
 }
 
 // --- Data Synchronization Functions ---
@@ -159,6 +162,7 @@ function loadPersonData(scenarioSuffix) {
     if (typeof renderIncomeList === 'function') renderIncomeList(s);
     _renderCrashList(s); 
     _renderVixList(s);
+    _renderSurvivalTiers(s);
 }
 
 // --- Dynamic Asset Logic ---
@@ -258,13 +262,10 @@ function _populateAssetUI(scenarioSuffix, owner, assetsArray) {
 // --- Strategy & Event Handlers ---
 
 function _gatherStrategyInputs(s) {
-    const getVal = (baseId) => parseFloat(document.getElementById(_resolveElementId(baseId, s))?.value) || 0;
     const getCheck = (baseId) => document.getElementById(_resolveElementId(baseId, s))?.checked || false;
 
     return {
-        survival_enable: getCheck('survival_enable'),
-        survival_trigger: getVal('survival_trigger'),
-        survival_expense: getVal('survival_expense')
+        survival_enable: getCheck('survival_enable')
     };
 }
 
@@ -343,6 +344,43 @@ function _setupVixListLogic(s) {
     _renderVixList(s);
 }
 
+function _setupSurvivalTierLogic(s) {
+    const btnId = `add-tier-btn-${s}`;
+    const triggerInputId = `tier_trigger_input_${s}`;
+    const expInputId = `tier_expense_input_${s}`;
+    
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', () => {
+        const trigger = parseFloat(document.getElementById(triggerInputId).value);
+        const expense = parseFloat(document.getElementById(expInputId).value);
+        
+        if (!isNaN(trigger) && !isNaN(expense)) {
+            const list = (s === 'a') ? survivalTiersA : survivalTiersB;
+            const newItem = { trigger, expense };
+            list.push(newItem);
+            list.sort((a,b) => a.trigger - b.trigger);
+            _renderSurvivalTiers(s);
+            
+            if (s === 'a' && !isRestoring) { 
+                survivalTiersB.push({ ...newItem });
+                survivalTiersB.sort((a,b) => a.trigger - b.trigger);
+                _renderSurvivalTiers('b');
+            }
+            if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+
+            document.getElementById(triggerInputId).value = '';
+            document.getElementById(expInputId).value = '';
+        }
+    });
+    
+    _renderSurvivalTiers(s);
+}
+
 function _renderCrashList(s) {
     const listId = `crash-list-${s}`;
     const container = document.getElementById(listId);
@@ -390,6 +428,27 @@ function _renderVixList(s) {
     });
 }
 
+function _renderSurvivalTiers(s) {
+    const listId = `survival-tier-list-${s}`;
+    const container = document.getElementById(listId);
+    if (!container) return;
+    
+    const data = (s === 'a') ? survivalTiersA : survivalTiersB;
+    container.innerHTML = '';
+    
+    data.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '4px';
+        div.style.fontSize = '0.9em';
+        
+        div.innerHTML = `
+            <span style="color: var(--danger-color);">NAV < <strong>${item.trigger}</strong> ➡️ Expense: <strong>$${item.expense.toLocaleString()}</strong></span>
+            <button type="button" onclick="_removeSurvivalTier('${s}', ${index})" style="margin-left:8px; padding:0 4px; font-size:0.8em; background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;">x</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
 window._removeCrash = function(s, index) {
     const list = (s === 'a') ? manualCrashesA : manualCrashesB;
     const removedItem = list[index];
@@ -422,6 +481,21 @@ window._removeVix = function(s, index) {
     if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
 }
 
+window._removeSurvivalTier = function(s, index) {
+    const list = (s === 'a') ? survivalTiersA : survivalTiersB;
+    const removedItem = list[index];
+    list.splice(index, 1);
+    _renderSurvivalTiers(s);
+    
+    if (s === 'a' && removedItem && !isRestoring) {
+        const idxB = survivalTiersB.findIndex(t => t.trigger === removedItem.trigger && t.expense === removedItem.expense);
+        if (idxB > -1) {
+            survivalTiersB.splice(idxB, 1);
+            _renderSurvivalTiers('b');
+        }
+    }
+    if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+}
 
 // --- Data Gathering (Main Export) ---
 function gatherInputs(scenarioSuffix) {
@@ -435,6 +509,7 @@ function gatherInputs(scenarioSuffix) {
     }
     let crashes = (s === 'a') ? manualCrashesA : manualCrashesB;
     let vixes = (s === 'a') ? manualVixA : manualVixB;
+    let tiers = (s === 'a') ? survivalTiersA : survivalTiersB;
 
     saveCurrentPersonData(s); 
 
@@ -477,6 +552,7 @@ function gatherInputs(scenarioSuffix) {
         scenario: {
             retirementAge: commonInputs.retirementAge,
             survivalConfig: _gatherStrategyInputs(s),
+            survivalTiers: tiers,
             manualCrashes: crashes,
             vixCrashes: vixes,
             user: userScenarioData,
@@ -526,7 +602,7 @@ function handleSaveScenarioClick() {
     const dataToSave = _gatherSaveObj();
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); 
-    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v16_2.json'; 
+    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v16_3.json'; 
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -582,6 +658,8 @@ function _gatherSaveObj() {
         crashes_b: manualCrashesB,
         vix_a: manualVixA,
         vix_b: manualVixB,
+        tiers_a: survivalTiersA,
+        tiers_b: survivalTiersB,
 
         scenarioAData: scenarioAData, 
         otherIncomes_a: typeof otherIncomes_a !== 'undefined' ? otherIncomes_a : window.otherIncomes_a || [],
@@ -614,6 +692,19 @@ function populateUIFromLoadedData(data) {
     manualCrashesB.length = 0; if(data.crashes_b) manualCrashesB.push(...data.crashes_b);
     manualVixA.length = 0; if(data.vix_a) manualVixA.push(...data.vix_a);
     manualVixB.length = 0; if(data.vix_b) manualVixB.push(...data.vix_b);
+    
+    // Backward Compatibility for Survival Tiers
+    survivalTiersA.length = 0; 
+    if(data.tiers_a) { survivalTiersA.push(...data.tiers_a); } 
+    else if(data.strategy_a && data.strategy_a.survival_trigger) { 
+        survivalTiersA.push({ trigger: data.strategy_a.survival_trigger, expense: data.strategy_a.survival_expense || 41000 }); 
+    }
+    
+    survivalTiersB.length = 0; 
+    if(data.tiers_b) { survivalTiersB.push(...data.tiers_b); } 
+    else if(data.strategy_b && data.strategy_b.survival_trigger) { 
+        survivalTiersB.push({ trigger: data.strategy_b.survival_trigger, expense: data.strategy_b.survival_expense || 41000 }); 
+    }
 
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
     const setCheck = (id, val) => { const el = document.getElementById(id); if(el) el.checked = !!val; };
@@ -633,8 +724,6 @@ function populateUIFromLoadedData(data) {
         const suffix = (s === 'a') ? '_a' : '_b';
         if (d) {
             setCheck(`survival_enable${suffix}`, d.survival_enable);
-            setVal(`survival_trigger${suffix}`, d.survival_trigger || 80);
-            setVal(`survival_expense${suffix}`, d.survival_expense || 41000);
         }
     };
     loadStrat('a', data.strategy_a);
@@ -647,6 +736,8 @@ function populateUIFromLoadedData(data) {
     _renderCrashList('b');
     _renderVixList('a');
     _renderVixList('b');
+    _renderSurvivalTiers('a');
+    _renderSurvivalTiers('b');
 }
 
 // [NEW] LocalStorage Implementation
