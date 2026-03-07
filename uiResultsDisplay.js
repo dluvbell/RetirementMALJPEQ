@@ -1,313 +1,352 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.5.0 (Feature: Intuitive Column Order Reorganization)
+ * @version     16.5.1 (Fix: Intuitive Column Order Reorganization without Refactoring)
  * @file        uiResultsDisplay.js
- * @description Renders results into tables and charts.
+ * @created     2025-11-09
+ * @description Displays results with clean dynamic array columns and restored D3 chart.
  */
 
 // uiResultsDisplay.js
 
-let _lastResultData = null;
+// --- State Variables ---
+let lastResultDetails = null;
+let lastOptimizationResults = null; 
+let lastRunInputsA = null;
+let lastRunInputsB = null;
+let chartRendered = false;
+let lastRunWasOptimization = false;
 
+// --- Initialization ---
 function initializeResultsDisplay() {
-    const runBtn = document.getElementById('runAnalysisBtn');
-    if (runBtn) {
-        runBtn.addEventListener('click', () => {
-            const inputsA = gatherInputs('a');
-            const inputsB = gatherInputs('b');
-            
-            document.getElementById('loading-indicator').classList.remove('hidden');
-            document.getElementById('results-container').classList.add('hidden');
-
-            setTimeout(() => {
-                try {
-                    const simResults = runFullSimulation(inputsA, inputsB);
-                    _lastResultData = simResults;
-                    
-                    displayComparisonMetrics(simResults);
-                    displaySeparatedDetailedTables(simResults);
-                    drawD3Chart(simResults);
-                    
-                    document.getElementById('loading-indicator').classList.add('hidden');
-                    document.getElementById('results-container').classList.remove('hidden');
-                } catch(e) {
-                    console.error(e);
-                    document.getElementById('loading-indicator').classList.add('hidden');
-                    alert("Error during simulation: " + e.message);
-                }
-            }, 100);
-        });
-    }
-
-    const exportBtn = document.getElementById('export-csv-btn');
-    if (exportBtn) {
-        exportBtn.classList.remove('hidden');
-        exportBtn.addEventListener('click', exportResultsToCSV);
-    }
-}
-
-function getLastResultDetails() {
-    return _lastResultData;
-}
-
-function displayComparisonMetrics(results) {
-    const container = document.getElementById('additional-metrics-container');
-    if (!container) return;
-
-    const resA = results.resultsA;
-    const resB = results.resultsB;
+    elements.runAnalysisBtn?.addEventListener('click', () => runAndDisplayAnalysis(true));
+    elements.runOptimizationBtn?.addEventListener('click', () => {
+         console.warn("Optimization N/A");
+    });
     
-    const lastA = resA.length > 0 ? resA[resA.length - 1] : null;
-    const lastB = resB.length > 0 ? resB[resB.length - 1] : null;
+    elements.toggle_details_a_btn?.addEventListener('click', () => {
+        elements.detailed_table_container_a?.classList.toggle('hidden');
+    });
+    elements.toggle_details_b_btn?.addEventListener('click', () => {
+        elements.detailed_table_container_b?.classList.toggle('hidden');
+    });
 
-    const totalAssetsA = lastA ? lastA.assetsSplit.total : 0;
-    const totalAssetsB = lastB ? lastB.assetsSplit.total : 0;
+    elements.export_csv_btn?.addEventListener('click', () => {
+        if (lastResultDetails) exportToCsv(lastResultDetails, lastRunInputsA, lastRunInputsB);
+    });
+    elements.toggle_graph_btn?.addEventListener('click', () => {
+        const graphContainer = elements.graph_container;
+        if (!graphContainer) return;
+        const isHidden = graphContainer.classList.toggle('hidden');
+        if (!isHidden && lastResultDetails) {
+            drawD3Chart(lastResultDetails);
+            chartRendered = true;
+        } else {
+            clearD3Chart();
+            chartRendered = false;
+        }
+    });
+}
 
-    let totalIncA = 0, totalIncB = 0;
-    let totalTaxA = 0, totalTaxB = 0;
+function getLastResultDetails() { return lastResultDetails; }
+function getLastOptimizationResults() { return null; }
 
-    resA.forEach(r => { totalIncA += r.income.total; totalTaxA += r.taxPayable; });
-    resB.forEach(r => { totalIncB += r.income.total; totalTaxB += r.taxPayable; });
+// --- Execution Function ---
+function runAndDisplayAnalysis(showLoader = true) {
+    lastRunWasOptimization = false;
+    if (showLoader && elements.loading_indicator) {
+        elements.loading_indicator.classList.remove('hidden');
+        if(elements.results_container) elements.results_container.classList.add('hidden');
+        if (typeof switchTab === 'function') switchTab('results');
+    }
 
-    container.innerHTML = `
-        <h3 data-lang-key="metricsTitle">Key Metrics Summary</h3>
-        <table class="metrics-table" style="width:100%; border-collapse: collapse; margin-top: 10px;">
-            <thead>
-                <tr style="background-color: var(--table-header-bg);">
-                    <th style="padding:8px; border:1px solid var(--border-color);">Metric</th>
-                    <th style="padding:8px; border:1px solid var(--border-color);" data-lang-key="metricsScenarioA">Scenario A</th>
-                    <th style="padding:8px; border:1px solid var(--border-color);" data-lang-key="metricsScenarioB">Scenario B</th>
-                    <th style="padding:8px; border:1px solid var(--border-color);" data-lang-key="metricsDifference">Difference (B - A)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td style="padding:8px; border:1px solid var(--border-color);" data-lang-key="metricsFinalAssets">Final Total Assets</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalAssetsA)}</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalAssetsB)}</td>
-                    <td style="padding:8px; border:1px solid var(--border-color); color: ${totalAssetsB - totalAssetsA >= 0 ? 'var(--success-color)' : 'var(--danger-color)'}">${formatCurrency(totalAssetsB - totalAssetsA)}</td>
-                </tr>
-                <tr>
-                    <td style="padding:8px; border:1px solid var(--border-color);" data-lang-key="metricsTotalIncomeGross">Total Income (Gross)</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalIncA)}</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalIncB)}</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalIncB - totalIncA)}</td>
-                </tr>
-                <tr>
-                    <td style="padding:8px; border:1px solid var(--border-color);" data-lang-key="metricsTotalTaxesPaid">Total Taxes Paid</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalTaxA)}</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalTaxB)}</td>
-                    <td style="padding:8px; border:1px solid var(--border-color);">${formatCurrency(totalTaxB - totalTaxA)}</td>
-                </tr>
-            </tbody>
-        </table>
-    `;
+    setTimeout(async () => {
+        clearD3Chart();
+        if(elements.graph_container) elements.graph_container.classList.add('hidden');
+        if(elements.monte_carlo_results_container) elements.monte_carlo_results_container.innerHTML = '';
+
+        try {
+            if (typeof gatherInputs !== 'function') throw new Error("gatherInputs not found.");
+            if (typeof runFullSimulation !== 'function') throw new Error("runFullSimulation not found.");
+
+            lastRunInputsA = gatherInputs('a');
+            lastRunInputsB = gatherInputs('b');
+            const results = runFullSimulation(lastRunInputsA, lastRunInputsB);
+            lastResultDetails = results;
+
+            displayComparisonMetrics(results);
+            displaySeparatedDetailedTables(results);
+
+            if (results.resultsA?.length > 0 || results.resultsB?.length > 0) {
+                if(elements.toggle_graph_btn) elements.toggle_graph_btn.classList.remove('hidden');
+            }
+
+            const lang = translations[currentLanguage];
+            if(elements.break_even_text_result) elements.break_even_text_result.textContent = lang.simComplete(results.resultsA?.length || 0, results.resultsB?.length || 0);
+
+            if(elements.toggle_details_a_btn) elements.toggle_details_a_btn.classList.remove('hidden');
+            if(elements.toggle_details_b_btn) elements.toggle_details_b_btn.classList.remove('hidden');
+
+            if(elements.export_csv_btn) elements.export_csv_btn.classList.remove('hidden');
+            if(elements.results_container) elements.results_container.classList.remove('hidden');
+
+        } catch (error) {
+            console.error("Simulation Failed:", error);
+            const lang = translations[currentLanguage];
+            if(elements.break_even_text_result) elements.break_even_text_result.textContent = lang.errSimFailed + error.message;
+        } finally {
+            if (showLoader && elements.loading_indicator) elements.loading_indicator.classList.add('hidden');
+        }
+    }, 50);
+}
+
+// --- Display Functions ---
+function displayComparisonMetrics(results) {
+   const lang = translations[currentLanguage];
+   const resultsA = results?.resultsA || [];
+   const resultsB = results?.resultsB || [];
+
+   const getFinalAssets = (resArray) => {
+       if (!resArray || resArray.length === 0) return 0;
+       const lastYear = resArray[resArray.length - 1];
+       return lastYear.assetsSplit?.total || lastYear.closingBalance || 0;
+   };
+   
+   const getTotalCanTax = (resArray) => resArray.reduce((sum, d) => sum + (d.taxPayable_can || 0), 0);
+   const getTotalThaiTax = (resArray) => resArray.reduce((sum, d) => sum + (d.taxPayable_thai || 0), 0);
+
+   const lblScenario = currentLanguage === 'ko' ? "시나리오" : "Scenario";
+   const lblCanTax = currentLanguage === 'ko' ? "총 캐나다 세금 (WHT)" : "Total Canadian Tax (WHT)";
+   const lblThaiTax = currentLanguage === 'ko' ? "총 말레이시아 세금" : "Total Malaysia Tax"; 
+   const lblFinalAssets = lang.metricsFinalAssets || "Final Total Assets";
+
+   const tableHTML = `
+       <h3 data-lang-key="metricsTitle">${lang.metricsTitle}</h3>
+       <table id="additional-metrics-table">
+           <thead>
+               <tr>
+                   <th>${lblScenario}</th>
+                   <th>${lblCanTax}</th>
+                   <th>${lblThaiTax}</th>
+                   <th>${lblFinalAssets}</th>
+               </tr>
+           </thead>
+           <tbody>
+               <tr>
+                   <td style="text-align: left; font-weight: 600;">${lang.metricsScenarioA}</td>
+                   <td>${formatCurrency(getTotalCanTax(resultsA))}</td>
+                   <td>${formatCurrency(getTotalThaiTax(resultsA))}</td>
+                   <td style="font-weight: bold;">${formatCurrency(getFinalAssets(resultsA))}</td>
+               </tr>
+               <tr>
+                   <td style="text-align: left; font-weight: 600;">${lang.metricsScenarioB}</td>
+                   <td>${formatCurrency(getTotalCanTax(resultsB))}</td>
+                   <td>${formatCurrency(getTotalThaiTax(resultsB))}</td>
+                   <td style="font-weight: bold;">${formatCurrency(getFinalAssets(resultsB))}</td>
+               </tr>
+           </tbody>
+       </table>`;
+
+    if(elements.additional_metrics_container) elements.additional_metrics_container.innerHTML = tableHTML;
 }
 
 function displaySeparatedDetailedTables(results) {
-    _renderTable(results.resultsA, 'detailed-table-container-a', 'Scenario A');
-    _renderTable(results.resultsB, 'detailed-table-container-b', 'Scenario B');
+    const lang = translations[currentLanguage];
+    const resultsA = results?.resultsA || [];
+    const resultsB = results?.resultsB || [];
 
-    const toggleA = document.getElementById('toggle-details-a-btn');
-    const toggleB = document.getElementById('toggle-details-b-btn');
-    const tableA = document.getElementById('detailed-table-container-a');
-    const tableB = document.getElementById('detailed-table-container-b');
-
-    if(toggleA && tableA) {
-        toggleA.classList.remove('hidden');
-        tableA.classList.remove('hidden');
-        toggleA.onclick = () => tableA.classList.toggle('hidden');
-    }
-    if(toggleB && tableB) {
-        toggleB.classList.remove('hidden');
-        tableB.classList.remove('hidden');
-        toggleB.onclick = () => tableB.classList.toggle('hidden');
-    }
-}
-
-function _renderTable(data, containerId, title) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    if (!data || data.length === 0) {
-        container.innerHTML = `<h4>${title} - No Data</h4>`;
-        return;
-    }
-
-    let html = `<h4>${title} Details</h4>`;
-    html += `<div style="overflow-x: auto;">
-             <table class="results-table" style="width: 100%; border-collapse: collapse; text-align: right; font-size: 0.85em;">
-             <thead>
-                <tr style="background-color: var(--table-header-bg);">
-                    <th style="padding: 6px; border: 1px solid var(--border-color); text-align: center;">Age</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color); text-align: center;">Mode</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Total Assets</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Dividends</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Pension</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Other Inc</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Inc: Total</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Expenses</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Taxes</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">Reinvested</th>
-                    <th style="padding: 6px; border: 1px solid var(--border-color);">WD: Total</th>
-                </tr>
-             </thead>
-             <tbody>`;
-
-    data.forEach(r => {
-        let modeDisplay = r.strategyState || "Normal";
-        let modeStyle = "";
-        if (modeDisplay.includes("Crash") || modeDisplay.includes("Tightened")) modeStyle = "color: var(--danger-color); font-weight: bold;";
-        else if (modeDisplay.includes("Rebound")) modeStyle = "color: var(--success-color); font-weight: bold;";
-        else if (modeDisplay.includes("VIX")) modeStyle = "color: var(--secondary-color); font-weight: bold;";
-
-        html += `
-            <tr>
-                <td style="padding: 6px; border: 1px solid var(--border-color); text-align: center;">${r.userAge}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); text-align: center; ${modeStyle}">${modeDisplay}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); font-weight: bold;">${formatCurrency(r.assetsSplit.total)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); color: var(--success-color);">${formatCurrency(r.dividends.total)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color);">${formatCurrency(r.income.pension)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color);">${formatCurrency(r.income.other)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); font-weight: bold;">${formatCurrency(r.income.total)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); color: var(--danger-color);">${formatCurrency(r.expenses)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); color: #dc3545;">${formatCurrency(r.taxPayable)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); color: var(--success-color); font-weight: bold;">${formatCurrency(r.reinvested)}</td>
-                <td style="padding: 6px; border: 1px solid var(--border-color); color: #dc3545;">${formatCurrency(r.withdrawals.total)}</td>
-            </tr>`;
-    });
-
-    html += `</tbody></table></div>`;
-    container.innerHTML = html;
-}
-
-function exportResultsToCSV() {
-    if (!_lastResultData) return;
-    
-    let csv = "--- SIMULATION RESULTS ---\n";
-    
-    // Updated intuitive column layout
     const cols = [
-        "Age", "Mode", "Total Assets", "Eq (Stock)", "CC (Covered Call)", 
-        "Total Dividends", "Pension", "Other Inc", "Total Income", 
-        "Total Expenses", "Total Taxes", "Reinvested", "WD: Total"
+        { key: 'userAge', label: lang.colAge, prop: 'userAge' },
+        { key: 'stratMode', label: 'Mode', prop: 'strategyState' },
+        { key: 'totalAsset', label: 'Total Assets', prop: 'assetsSplit.total' },
+        { key: 'eqTotal', label: 'Eq (주식)', prop: 'assetsSplit.standard_equity' },
+        { key: 'ccTotal', label: 'CC (커버드콜)', prop: 'assetsSplit.covered_call' },
+        { key: 'divTotal', label: 'Dividends', prop: 'dividends.total' },
+        { key: 'pension', label: 'Pension', prop: 'income.pension' },
+        { key: 'otherInc', label: 'Other Inc', prop: 'income.other' },
+        { key: 'incomeTotal', label: lang.colIncomeTotal, prop: 'income.total' },
+        { key: 'expTotal', label: lang.colExpenses, prop: 'expenses' },
+        { key: 'taxTotal', label: lang.colTaxesPaid, prop: 'taxPayable' },
+        { key: 'reinvest', label: 'Reinvested', prop: 'reinvested' },
+        { key: 'wdTotal', label: lang.colWdTotal, prop: 'withdrawals.total' }
     ];
 
-    const generateHeader = (prefix) => cols.map(c => c + "_" + prefix).join(",");
-    
-    csv += generateHeader("A") + "," + generateHeader("B") + "\n";
+    const renderTable = (data, title) => {
+        let html = `<h3>${title}</h3><div style="overflow-x:auto;"><table><thead><tr>`;
+        cols.forEach(col => html += `<th>${col.label}</th>`);
+        html += `</tr></thead><tbody>`;
 
-    const maxLen = Math.max(_lastResultData.resultsA.length, _lastResultData.resultsB.length);
+        data.forEach(d => {
+            html += `<tr>`;
+            cols.forEach(col => {
+                const raw = col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i], d) : d[col.key];
+                let displayVal = (raw || '-');
+                if (typeof raw === 'number' && col.key !== 'userAge') displayVal = formatCurrency(raw);
+                html += `<td>${displayVal}</td>`;
+            });
+            html += `</tr>`;
+        });
+        html += `</tbody></table></div>`;
+        return html;
+    };
 
-    for (let i = 0; i < maxLen; i++) {
-        const getRowData = (dataArray) => {
-            if (i < dataArray.length) {
-                const r = dataArray[i];
-                return [
-                    r.userAge,
-                    r.strategyState || "Normal",
-                    Math.round(r.assetsSplit.total),
-                    Math.round(r.assetsSplit.standard_equity),
-                    Math.round(r.assetsSplit.covered_call),
-                    Math.round(r.dividends.total),
-                    Math.round(r.income.pension),
-                    Math.round(r.income.other),
-                    Math.round(r.income.total),
-                    Math.round(r.expenses),
-                    Math.round(r.taxPayable),
-                    Math.round(r.reinvested),
-                    Math.round(r.withdrawals.total)
-                ];
-            } else {
-                return Array(cols.length).fill("");
-            }
-        };
-
-        const dataA = getRowData(_lastResultData.resultsA);
-        const dataB = getRowData(_lastResultData.resultsB);
-
-        csv += dataA.join(",") + "," + dataB.join(",") + "\n";
+    if (elements.detailed_table_container_a) {
+        elements.detailed_table_container_a.innerHTML = renderTable(resultsA, `${lang.metricsScenarioA} Details`);
     }
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'malaysia_retirement_simulation_v16_5.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    if (elements.detailed_table_container_b) {
+        elements.detailed_table_container_b.innerHTML = renderTable(resultsB, `${lang.metricsScenarioB} Details`);
+    }
 }
 
-function drawD3Chart(results) {
-    const container = document.getElementById('graph-container');
-    const svgEl = document.getElementById('results-chart');
-    if (!container || !svgEl) return;
+function exportToCsv(results, inputsA, inputsB) {
+    let csv = "data:text/csv;charset=utf-8,\uFEFF";
     
-    container.classList.remove('hidden');
-    d3.select(svgEl).selectAll("*").remove();
+    const addRow = (k, vA, vB) => { 
+        const safeA = (vA !== undefined && vA !== null) ? vA : "";
+        const safeB = (vB !== undefined && vB !== null) ? vB : "";
+        csv += `"${k}","${safeA}","${safeB}"\r\n`; 
+    };
 
-    const dataA = results.resultsA;
-    const dataB = results.resultsB;
-    if(dataA.length === 0 && dataB.length === 0) return;
+    csv += "--- INPUT PARAMETERS ---\r\n";
+    addRow("Parameter", "Scenario A", "Scenario B");
+    addRow("Retirement Age", inputsA.scenario.retirementAge, inputsB.scenario.retirementAge);
+    addRow("User Birth Year", inputsA.scenario.user.birthYear, inputsB.scenario.user.birthYear);
+    addRow("Spouse Birth Year", inputsA.scenario.spouse?.birthYear, inputsB.scenario.spouse?.birthYear);
+    addRow("Exchange Rate", inputsA.exchangeRate, inputsB.exchangeRate);
+    addRow("COLA (%)", inputsA.cola * 100, inputsB.cola * 100);
+    addRow("Max Age", inputsA.lifeExpectancy, inputsB.lifeExpectancy);
+    csv += "\r\n";
 
-    const margin = {top: 20, right: 30, bottom: 40, left: 60};
-    const width = container.clientWidth - margin.left - margin.right;
-    const height = 400 - margin.top - margin.bottom;
+    csv += `[Assets] Summary\r\n`;
+    addRow(`  User Asset Count`, inputsA.scenario.user.assets?.length || 0, inputsB.scenario.user.assets?.length || 0);
+    addRow(`  Spouse Asset Count`, inputsA.scenario.spouse?.assets?.length || 0, inputsB.scenario.spouse?.assets?.length || 0);
+    csv += "\r\n";
 
-    const svg = d3.select(svgEl)
-        .attr("width", width + margin.left + margin.right)
-        .attr("height", height + margin.top + margin.bottom)
-      .append("g")
-        .attr("transform", `translate(${margin.left},${margin.top})`);
+    const countA = inputsA.scenario.user.otherIncomes?.length || 0;
+    const countB = inputsB.scenario.user.otherIncomes?.length || 0;
+    addRow("Manual Income/Expense Items Count", countA, countB);
 
-    const allData = [...dataA, ...dataB];
-    const x = d3.scaleLinear()
-        .domain(d3.extent(allData, d => d.userAge))
-        .range([0, width]);
+    csv += "\r\n--- SIMULATION RESULTS ---\r\n";
+
+    const cols = [
+        { label: "Age", prop: 'userAge' },
+        { label: "Mode", prop: 'strategyState' },
+        { label: "Total Assets", prop: 'assetsSplit.total' },
+        { label: "Eq (Stock)", prop: 'assetsSplit.standard_equity' },
+        { label: "CC (Covered Call)", prop: 'assetsSplit.covered_call' },
+        { label: "Total Dividends", prop: 'dividends.total' },
+        { label: "Pension", prop: 'income.pension' },
+        { label: "Other Inc", prop: 'income.other' },
+        { label: "Total Income", prop: 'income.total' },
+        { label: "Total Expenses", prop: 'expenses' },
+        { label: "Total Taxes", prop: 'taxPayable' },
+        { label: "Reinvested", prop: 'reinvested' },
+        { label: "WD: Total", prop: 'withdrawals.total' }
+    ];
+
+    csv += "Age," + cols.filter(c=>c.label !== 'Age').map(c => c.label + "_A").join(',') + "," + cols.filter(c=>c.label !== 'Age').map(c => c.label + "_B").join(',') + "\r\n";
+
+    const resultsA = results.resultsA || [];
+    const resultsB = results.resultsB || [];
+    const allAges = [...new Set([...resultsA.map(d=>d.userAge), ...resultsB.map(d=>d.userAge)])].sort((a,b)=>a-b);
+
+    allAges.forEach(age => {
+        const dA = resultsA.find(d => d.userAge === age);
+        const dB = resultsB.find(d => d.userAge === age);
+        let row = [age];
         
-    const y = d3.scaleLinear()
-        .domain([0, d3.max(allData, d => d.assetsSplit.total) * 1.1])
-        .range([height, 0]);
-
-    svg.append("g")
-        .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(x).tickFormat(d3.format("d")));
-
-    svg.append("g")
-        .call(d3.axisLeft(y).tickFormat(d => "$" + d3.format(".2s")(d)));
-
-    const line = d3.line()
-        .x(d => x(d.userAge))
-        .y(d => y(d.assetsSplit.total))
-        .curve(d3.curveMonotoneX);
-
-    if (dataA.length > 0) {
-        svg.append("path")
-            .datum(dataA)
-            .attr("fill", "none")
-            .attr("stroke", "#3b82f6")
-            .attr("stroke-width", 2)
-            .attr("d", line);
-    }
-    if (dataB.length > 0) {
-        svg.append("path")
-            .datum(dataB)
-            .attr("fill", "none")
-            .attr("stroke", "#ef4444")
-            .attr("stroke-width", 2)
-            .attr("stroke-dasharray", "5,5")
-            .attr("d", line);
-    }
-
-    const legend = svg.append("g")
-        .attr("transform", `translate(${width - 120}, 10)`);
+        cols.forEach(col => { 
+            if (col.label === 'Age') return;
+            const getVal = (d) => d ? (col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0) : "";
+            let vA = getVal(dA);
+            if (typeof vA === 'number') vA = vA.toFixed(0);
+            row.push(vA);
+        });
         
-    legend.append("rect").attr("x", 0).attr("y", 0).attr("width", 15).attr("height", 2).attr("fill", "#3b82f6");
-    legend.append("text").attr("x", 20).attr("y", 5).text("Scenario A").style("font-size", "12px").attr("alignment-baseline","middle");
-    
-    legend.append("rect").attr("x", 0).attr("y", 20).attr("width", 15).attr("height", 2).attr("fill", "#ef4444");
-    legend.append("text").attr("x", 20).attr("y", 25).text("Scenario B").style("font-size", "12px").attr("alignment-baseline","middle");
+        cols.forEach(col => {
+             if (col.label === 'Age') return;
+             const getVal = (d) => d ? (col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0) : "";
+             let vB = getVal(dB);
+             if (typeof vB === 'number') vB = vB.toFixed(0);
+             row.push(vB);
+        });
+
+        csv += row.join(',') + "\r\n";
+    });
+
+    const encodedUri = encodeURI(csv);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "malaysia_retirement_simulation_v14_4.csv"); 
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
+
+function clearD3Chart() {
+    if (elements.results_chart) d3.select(elements.results_chart).selectAll("*").remove();
+    d3.select('body').select('.d3-tooltip').remove();
+}
+
+drawD3Chart = function(results) {
+    if (typeof d3 === 'undefined' || !elements.results_chart || !elements.graph_container) return;
+    d3.select(elements.results_chart).selectAll("*").remove();
+    d3.select('body').select('.d3-tooltip').remove();
+
+    const resultsA = results?.resultsA || [];
+    const resultsB = results?.resultsB || [];
+    
+    const getAssetTotal = (d) => d.assetsSplit?.total || d.closingBalance || 0;
+
+    const combinedDataMap = new Map();
+    resultsA.forEach(d => combinedDataMap.set(d.year, { year: d.year, age: d.userAge, valueA: getAssetTotal(d) }));
+    resultsB.forEach(d => {
+        if (!combinedDataMap.has(d.year)) combinedDataMap.set(d.year, { year: d.year, age: d.userAge });
+        combinedDataMap.get(d.year).valueB = getAssetTotal(d);
+    });
+    const data = Array.from(combinedDataMap.values()).sort((a,b)=>a.year-b.year);
+    if(data.length===0) return;
+
+    const svg = d3.select(elements.results_chart), margin = {top:20,right:30,bottom:40,left:80},
+          width = +svg.node().getBoundingClientRect().width - margin.left - margin.right,
+          height = +svg.node().getBoundingClientRect().height - margin.top - margin.bottom;
+    svg.attr("viewBox", `0 0 ${width+margin.left+margin.right} ${height+margin.top+margin.bottom}`);
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scaleLinear().domain(d3.extent(data, d=>d.year)).range([0,width]);
+    const y = d3.scaleLinear().domain([0, d3.max(data, d=>Math.max(d.valueA||0, d.valueB||0))*1.05]).range([height,0]);
+
+    g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).tickFormat(d3.format("d")));
+    g.append("g").call(d3.axisLeft(y).tickFormat(d => "$" + d3.format("~s")(d)));
+
+    const line = (key) => d3.line().defined(d=>!isNaN(d[key])).x(d=>x(d.year)).y(d=>y(d[key]));
+    g.append("path").datum(data).attr("fill","none").attr("stroke","var(--chart-line-a)").attr("stroke-width",2.5).attr("class", "line line-a").attr("d", line("valueA"));
+    g.append("path").datum(data).attr("fill","none").attr("stroke","var(--chart-line-b)").attr("stroke-width",2.5).attr("class", "line line-b").attr("d", line("valueB"));
+
+    const tooltip = d3.select("body").append("div").attr("class", "d3-tooltip").style("opacity", 0);
+    const focus = g.append("g").style("display", "none");
+    focus.append("line").attr("class", "focus-line").attr("y1", 0).attr("y2", height);
+
+    g.append("rect")
+        .attr("class", "overlay")
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "none")
+        .style("pointer-events", "all")
+        .on("mouseover", () => { focus.style("display", null); tooltip.style("opacity", 1); })
+        .on("mouseout", () => { focus.style("display", "none"); tooltip.style("opacity", 0); })
+        .on("mousemove", (event) => {
+            const bisectDate = d3.bisector(d => d.year).left;
+            const x0 = x.invert(d3.pointer(event, g.node())[0]);
+            const i = bisectDate(data, x0, 1);
+            const d = (d0 = data[i - 1], d1 = data[i]) ? (x0 - d0.year > d1.year - x0 ? d1 : d0) : (d0 || d1);
+            if (!d) return;
+
+            focus.attr("transform", `translate(${x(d.year)},0)`);
+            tooltip.html(`<strong>Year: ${d.year} (Age: ${d.age})</strong>
+                          <div><span class="color-a"></span>Scenario A: ${formatCurrency(d.valueA)}</div>
+                          <div><span class="color-b"></span>Scenario B: ${formatCurrency(d.valueB)}</div>`)
+                   .style("left", (event.pageX + 15) + "px")
+                   .style("top", (event.pageY - 28) + "px");
+        });
+};
