@@ -1,397 +1,482 @@
-/**
- * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
- * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.7.0 (Fix: Max Drawdown (MDD) based Unlimited Multi-Tier Survival Logic)
- * @file        engineCore.js
- * @description Core simulation loop. Integrated Two-Track engine and MDD-based survival trigger.
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="dluvbell">
+    <title data-lang-key="pageTitle">Canada-Malaysia Retirement (Non-Resident)</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-// engineCore.js
+    <div class="container">
+        <header>
+            <h1 data-lang-key="mainTitle">Canada to Malaysia Retirement</h1>
+            <p data-lang-key="subTitle">Simulate non-resident retirement in Malaysia (Single Person).</p>
+            <div class="header-controls">
+                <div class="theme-switch-wrapper">
+                    <label class="theme-switch" for="theme-toggle">
+                        <input type="checkbox" id="theme-toggle" />
+                        <div class="slider round"></div>
+                    </label>
+                    <span data-lang-key="darkModeLabel">Dark Mode</span>
+                </div>
+                
+                <button id="load-scenario-btn" type="button" class="btn-secondary" data-lang-key="loadScenarioBtn">Load Scenario</button>
+                <button id="save-scenario-btn" type="button" class="btn-secondary" data-lang-key="saveScenarioBtn">Save Scenario</button>
+                <input type="file" id="scenario-file-input" accept=".json" style="display: none;">
+            </div>
+        </header>
 
-function runFullSimulation(inputsA, inputsB) {
-    const baseYear = 2025;
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="scenarioA" data-lang-key="tabScenarioA">Scenario A</button>
+            <button class="tab-btn" data-tab="scenarioB" data-lang-key="tabScenarioB">Scenario B</button>
+            <button class="tab-btn" data-tab="results" data-lang-key="tabResults">Results</button>
+        </nav>
 
-    const getSafeCola = (val) => (val !== undefined && val !== null && !isNaN(val)) ? Number(val) : 0.025;
-    
-    const getStrategySettings = (inputs) => ({
-        survivalConfig: inputs.scenario.survivalConfig || {},
-        survivalTiers: inputs.scenario.survivalTiers || [],
-        manualCrashes: inputs.scenario.manualCrashes || [],
-        vixCrashes: inputs.scenario.vixCrashes || []
-    });
+        <main class="tab-content-container">
+            <div id="scenarioA-pane" class="tab-pane active">
+                <div class="input-section">
+                    <h2 data-lang-key="section1Title">1. Enter Information (Scenario A)</h2>
+                    
+                    <div class="form-grid">
+                        <fieldset>
+                            <legend data-lang-key="legendBasicInfo">Basic Information</legend>
+                             <div class="form-group">
+                                <label for="exchangeRate" data-lang-key="exchangeRateLabel">Exchange Rate (1 CAD = ? MYR)</label>
+                                <span class="tooltip" data-lang-key-tooltip="exchangeRateTooltip">?</span>
+                                <input type="number" id="exchangeRate" value="3.1" step="0.1">
+                            </div>
+                           <div class="form-group">
+                                <label for="retirementAge_a" data-lang-key="retirementAgeLabel">Retirement Age</label>
+                                <input type="number" id="retirementAge_a" value="60">
+                            </div>
+                             <div class="form-group">
+                                <label for="lifeExpectancy" data-lang-key="lifeExpectancyLabel">Maximum Calculation Age</label>
+                                <input type="number" id="lifeExpectancy" value="95">
+                            </div>
+                            <div class="form-group">
+                                <label for="cola" data-lang-key="colaLabel">Global COLA (%)</label>
+                                <input type="number" id="cola" step="0.1" value="2.5">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                                <input type="checkbox" id="isCouple_a" style="width: auto;">
+                                <label for="isCouple_a" style="margin:0; cursor: pointer;">Couple / Split Income Mode?</label>
+                            </div>
+                        </fieldset>
 
-    const globalSettingsA = {
-        maxAge: Number(inputsA.lifeExpectancy) || 95,
-        cola: getSafeCola(inputsA.cola),
-        baseYear: baseYear,
-        exchangeRate: Number(inputsA.exchangeRate) || 25.0,
-        ...getStrategySettings(inputsA)
-    };
-    const resultsA = simulateScenario(inputsA.scenario, globalSettingsA, "A");
+                        <fieldset>
+                            <legend data-lang-key="legendYourInfo">Income Plan</legend> 
+                            <div class="form-group">
+                                <label for="userBirthYear" data-lang-key="userBirthYearLabel">Birth Year</label>
+                                <input type="number" id="userBirthYear" value="1980">
+                            </div>
+                        </fieldset>
 
-    const globalSettingsB = {
-        maxAge: Number(inputsB.lifeExpectancy) || 95,
-        cola: getSafeCola(inputsB.cola),
-        baseYear: baseYear,
-        exchangeRate: Number(inputsB.exchangeRate) || 25.0,
-        ...getStrategySettings(inputsB)
-    };
-    const resultsB = simulateScenario(inputsB.scenario, globalSettingsB, "B");
+                        <fieldset id="spouse-income-plan-container-a" class="hidden">
+                            <legend>Spouse Income Plan</legend>
+                            <div class="form-group">
+                                <label for="spouseBirthYear">Spouse Birth Year</label>
+                                <input type="number" id="spouseBirthYear" value="1980">
+                            </div>
+                        </fieldset>
+                    </div> 
 
-    return { resultsA, resultsB };
-}
+                    <div style="margin-top: 2rem;">
+                        <fieldset class="full-width">
+                            <legend data-lang-key="legendAssets">Assets (Investment Portfolio)</legend>
+                            <div class="asset-input-group">
+                                <h4 class="asset-owner-title">My Portfolio (User)</h4>
+                                <div id="dynamic-assets-list-a"></div>
+                                <button type="button" id="add-asset-btn-a" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
+                            </div>
 
-function simulateScenario(scenario, settings, label = "") {
-    const results = [];
-    const hasSpouse = (scenario.spouse && scenario.spouse.hasSpouse === true);
+                            <div id="spouse-assets-container-a" class="asset-input-group hidden" style="margin-top: 1.5rem; border-top: 1px dashed var(--border-color); padding-top: 1rem;">
+                                <h4 class="asset-owner-title">Spouse Portfolio</h4>
+                                <div id="dynamic-assets-list-spouse-a"></div>
+                                <button type="button" id="add-asset-btn-spouse-a" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
+                            </div>
+                        </fieldset>
+                    </div>
 
-    // 1. Initialize Portfolio Assets (Dynamic Array)
-    let currentUserAssets = Array.isArray(scenario.user?.assets) ? JSON.parse(JSON.stringify(scenario.user.assets)) : [];
-    let currentSpouseAssets = Array.isArray(scenario.spouse?.assets) ? JSON.parse(JSON.stringify(scenario.spouse.assets)) : [];
-    
-    currentUserAssets.forEach(a => { a.equity = a.balance || 0; a.currentNav = 100.0; a.maxNav = 100.0; });
-    currentSpouseAssets.forEach(a => { a.equity = a.balance || 0; a.currentNav = 100.0; a.maxNav = 100.0; });
+                    <div style="margin-top: 2rem;">
+                        <fieldset class="full-width">
+                            <legend>Strategy & Market Scenarios</legend>
+                            
+                            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+                                <div>
+                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">📉 Market Events (Drop & VIX)</h4>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Simulate drops or VIX crush at specific ages.</label>
+                                        <div id="crash-list-a" style="margin-bottom: 0.5rem;"></div>
+                                        <div id="vix-list-a" style="margin-bottom: 1rem;"></div>
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <input type="number" id="crash_age_input_a" placeholder="Age" style="width: 80px;">
+                                            <input type="text" inputmode="text" id="crash_drop_input_a" placeholder="Drop % (e.g. -30)" style="width: 120px;">
+                                            <button type="button" id="add-crash-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ Drop</button>
+                                        </div>
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <input type="number" id="vix_age_input_a" placeholder="Age" style="width: 80px;">
+                                            <button type="button" id="add-vix-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ VIX Crush (Min Yield)</button>
+                                        </div>
+                                    </div>
+                                </div>
 
-    let prevYearThaiTax_User = 0;
-    let prevYearThaiTax_Spouse = 0;
+                                <div>
+                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">🚨 Survival Tightening Rule</h4>
+                                    <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                        <input type="checkbox" id="survival_enable_a" style="width: auto;">
+                                        <label for="survival_enable_a" style="margin:0; cursor: pointer;">Enable Rule</label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Define multiple tightening tiers.</label>
+                                        <div id="survival-tier-list-a" style="margin-bottom: 0.5rem;"></div>
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <input type="number" id="tier_trigger_input_a" placeholder="NAV <" style="width: 80px;">
+                                            <input type="number" id="tier_expense_input_a" placeholder="Expense (PV $)" style="width: 120px;">
+                                            <button type="button" id="add-tier-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ Add Tier</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-    const userRetirementAge = Number(scenario.retirementAge) || 60;
-    const maxAge = Number(settings.maxAge) || 95;
-    const userBirthYear = Number(scenario.user?.birthYear) || 1980;
-    const spouseBirthYear = hasSpouse ? (Number(scenario.spouse?.birthYear) || userBirthYear) : userBirthYear;
+                             <hr style="border-top: 1px dashed var(--border-color); margin: 1.5rem 0;">
+                            <div> <label data-lang-key="legendOtherIncome">Other Income & Expenses</label>
+                                <p data-lang-key="otherIncomeDesc" style="margin-bottom: 0.5rem; font-size: 0.9em;">Manage pensions, rental income, and living expenses.</p>
+                                <button id="manage-income-btn" type="button" data-lang-key="manageIncomeExpensesBtn">[ Manage Income & Expenses ]</button>
+                            </div>
+                        </fieldset>
+                    </div>
+                </div>
+            </div>
 
-    const startYear = userBirthYear + userRetirementAge;
-    const endYear = userBirthYear + maxAge;
+            <div id="scenarioB-pane" class="tab-pane">
+                 <div class="input-section">
+                    <h2 data-lang-key="section1Title">1. Enter Information (Scenario B)</h2>
+                    
+                    <div class="form-grid">
+                         <fieldset>
+                            <legend data-lang-key="legendBasicInfo">Basic Information</legend>
+                            <div class="form-group">
+                                <label for="exchangeRate_b" data-lang-key="exchangeRateLabel">Exchange Rate (1 CAD = ? MYR)</label>
+                                <span class="tooltip" data-lang-key-tooltip="exchangeRateTooltip">?</span>
+                                <input type="number" id="exchangeRate_b" value="3.1" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="retirementAge_b" data-lang-key="retirementAgeLabel">Retirement Age</label>
+                                <input type="number" id="retirementAge_b" value="65"> </div>
+                            <div class="form-group">
+                                <label for="lifeExpectancy_b" data-lang-key="lifeExpectancyLabel">Maximum Calculation Age</label>
+                                <input type="number" id="lifeExpectancy_b" value="95">
+                            </div>
+                            <div class="form-group">
+                                <label for="cola_b" data-lang-key="colaLabel">Global COLA (%)</label>
+                                <input type="number" id="cola_b" step="0.1" value="2.5">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
+                                <input type="checkbox" id="isCouple_b" style="width: auto;">
+                                <label for="isCouple_b" style="margin:0; cursor: pointer;">Couple / Split Income Mode?</label>
+                            </div>
+                        </fieldset>
+                        <fieldset>
+                            <legend data-lang-key="legendYourInfo">Income Plan</legend> 
+                            <div class="form-group">
+                                <label for="userBirthYear_b" data-lang-key="userBirthYearLabel">Birth Year</label>
+                                <input type="number" id="userBirthYear_b" value="1980">
+                            </div>
+                        </fieldset>
+                        
+                        <fieldset id="spouse-income-plan-container-b" class="hidden">
+                            <legend>Spouse Income Plan</legend>
+                            <div class="form-group">
+                                <label for="spouseBirthYear_b">Spouse Birth Year</label>
+                                <input type="number" id="spouseBirthYear_b" value="1980">
+                            </div>
+                        </fieldset>
+                    </div>
 
-    for (let currentYear = startYear; currentYear <= endYear; currentYear++) {
-        const userAge = currentYear - userBirthYear;
-        if (userAge > maxAge) break;
+                    <div style="margin-top: 2rem;">
+                        <fieldset class="full-width">
+                            <legend data-lang-key="legendAssets">Assets (Investment Portfolio)</legend>
+                            <div class="asset-input-group">
+                                <h4 class="asset-owner-title">My Portfolio (User)</h4>
+                                <div id="dynamic-assets-list-b"></div>
+                                <button type="button" id="add-asset-btn-b" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
+                            </div>
 
-        const yearData = {
-            year: currentYear, 
-            userAge: userAge,
-            user: {
-                age: userAge,
-                openingBalance: _flattenAssets(currentUserAssets), 
-                income: { pension: 0, other_taxable: 0, other_non_remitted: 0 },
-                tax: { total: 0, can: 0, thai: 0 },
-                withdrawals: { total: 0, thai_taxable_remittance: 0, wht_deducted: 0 }
-            },
-            spouse: {
-                age: currentYear - spouseBirthYear,
-                openingBalance: _flattenAssets(currentSpouseAssets),
-                income: { pension: 0, other_taxable: 0, other_non_remitted: 0 },
-                tax: { total: 0, can: 0, thai: 0 },
-                withdrawals: { total: 0, thai_taxable_remittance: 0, wht_deducted: 0 }
-            },
-            expenses: 0, expenses_thai: 0, expenses_overseas: 0,
-            expenses_thai_tax: prevYearThaiTax_User + prevYearThaiTax_Spouse,
-            growth: 0,
-            dividends: { total: 0, user: 0, spouse: 0, totalWht: 0, userWht: 0, spouseWht: 0 },
-            income: { total: 0, pension: 0, other: 0 },
-            withdrawals: { total: 0 },
-            taxPayable: 0, taxPayable_can: 0, taxPayable_thai: 0,
-            closingBalance: 0,
-            reinvested: 0,
-            isCrashYear: false,
-            isVixCrushYear: false,
-            isSurvivalTightened: false,
-            strategyState: "Normal",
-            assetsSplit: { total: 0, standard_equity: 0, covered_call: 0 }
-        };
+                            <div id="spouse-assets-container-b" class="asset-input-group hidden" style="margin-top: 1.5rem; border-top: 1px dashed var(--border-color); padding-top: 1rem;">
+                                <h4 class="asset-owner-title">Spouse Portfolio</h4>
+                                <div id="dynamic-assets-list-spouse-b"></div>
+                                <button type="button" id="add-asset-btn-spouse-b" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
+                            </div>
+                        </fieldset>
+                    </div>
 
-        // --- 1. Apply Growth (Portfolio) ---
-        let crashOverride = null;
-        let vixCrushOverride = false;
+                    <div style="margin-top: 2rem;">
+                        <fieldset class="full-width">
+                            <legend>Strategy & Market Scenarios</legend>
+                            
+                            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
+                                <div>
+                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">📉 Market Events (Drop & VIX)</h4>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Simulate drops or VIX crush at specific ages.</label>
+                                        <div id="crash-list-b" style="margin-bottom: 0.5rem;"></div>
+                                        <div id="vix-list-b" style="margin-bottom: 1rem;"></div>
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <input type="number" id="crash_age_input_b" placeholder="Age" style="width: 80px;">
+                                            <input type="text" inputmode="text" id="crash_drop_input_b" placeholder="Drop % (e.g. -30)" style="width: 120px;">
+                                            <button type="button" id="add-crash-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ Drop</button>
+                                        </div>
+                                        <div style="display: flex; gap: 0.5rem;">
+                                            <input type="number" id="vix_age_input_b" placeholder="Age" style="width: 80px;">
+                                            <button type="button" id="add-vix-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ VIX Crush (Min Yield)</button>
+                                        </div>
+                                    </div>
+                                </div>
 
-        if (settings.vixCrashes) {
-            if (settings.vixCrashes.some(c => c.age === userAge)) {
-                vixCrushOverride = true;
-                yearData.isVixCrushYear = true;
-                yearData.strategyState = "⏸️ VIX Crush";
-            }
-        }
+                                <div>
+                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">🚨 Survival Tightening Rule</h4>
+                                    <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                        <input type="checkbox" id="survival_enable_b" style="width: auto;">
+                                        <label for="survival_enable_b" style="margin:0; cursor: pointer;">Enable Rule</label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Define multiple tightening tiers.</label>
+                                        <div id="survival-tier-list-b" style="margin-bottom: 0.5rem;"></div>
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <input type="number" id="tier_trigger_input_b" placeholder="NAV <" style="width: 80px;">
+                                            <input type="number" id="tier_expense_input_b" placeholder="Expense (PV $)" style="width: 120px;">
+                                            <button type="button" id="add-tier-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ Add Tier</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-        if (settings.manualCrashes) {
-            const crash = settings.manualCrashes.find(c => c.age === userAge);
-            if (crash) {
-                crashOverride = -(crash.drop) / 100;
-                if (crash.drop > 0) {
-                    yearData.isCrashYear = true;
-                    yearData.strategyState = "📉 Crash"; 
-                } else {
-                    yearData.isCrashYear = false;
-                    yearData.strategyState = "📈 Rebound";
-                }
-            }
-        }
+                             <hr style="border-top: 1px dashed var(--border-color); margin: 1.5rem 0;">
+                            <div> <label data-lang-key="legendOtherIncome">Other Income & Expenses</label>
+                                <p data-lang-key="otherIncomeDesc" style="margin-bottom: 0.5rem; font-size: 0.9em;">Manage pensions, rental income, and living expenses.</p>
+                                <button id="manage-income-btn_b" type="button" data-lang-key="manageIncomeExpensesBtn">[ Manage Income & Expenses ]</button>
+                            </div>
+                        </fieldset>
+                         </div>
+                </div>
+            </div>
 
-        const userGrowthResult = step1_ApplyGrowth(currentUserAssets, settings, crashOverride, vixCrushOverride);
-        const spouseGrowthResult = step1_ApplyGrowth(currentSpouseAssets, settings, crashOverride, vixCrushOverride);
+            <div id="results-pane" class="tab-pane">
+                 <div class="output-section">
+                    <h2 data-lang-key="section2Title">2. Analysis Results</h2>
 
-        yearData.dividends.user = userGrowthResult.totalDiv;
-        yearData.dividends.spouse = spouseGrowthResult.totalDiv;
-        yearData.dividends.total = userGrowthResult.totalDiv + spouseGrowthResult.totalDiv;
-        
-        yearData.dividends.userWht = userGrowthResult.totalDivWht;
-        yearData.dividends.spouseWht = spouseGrowthResult.totalDivWht;
-        yearData.dividends.totalWht = userGrowthResult.totalDivWht + spouseGrowthResult.totalDivWht;
+                    <div class="main-action-controls">
+                        <button id="runAnalysisBtn" type="button" data-lang-key="runAnalysisBtn">Run Analysis</button>
+                        <div class="mc-group">
+                            <button id="runMonteCarloBtn" type="button" data-lang-key="runMonteCarloBtn">Run Monte Carlo</button>
+                            <div>
+                                <label for="monteCarloRunsSelect" data-lang-key="monteCarloRunsLabel" style="margin-bottom: 0.25rem; font-size: 0.9em;">Runs:</label>
+                                <select id="monteCarloRunsSelect">
+                                    <option value="1000">1K</option>
+                                    <option value="5000">5K</option>
+                                    <option value="10000" selected>10K</option>
+                                    <option value="50000">50K</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button id="runOptimizationBtn" type="button" class="hidden" data-lang-key="runOptimizationBtn">Run Optimization (N/A)</button>
+                    </div>
 
-        yearData.growth = userGrowthResult.gains + spouseGrowthResult.gains;
-        yearData.user.growth = userGrowthResult.gains; 
-        yearData.spouse.growth = spouseGrowthResult.gains;
+                    <div id="loading-indicator" class="hidden"> <p data-lang-key="loadingText">Calculating...</p> <div class="spinner"></div> </div>
+                    <div id="optimizer-loading-indicator" class="hidden">
+                         <p id="optimizer-loading-text" data-lang-key="loadingTextOptimizer" style="font-weight: bold; margin-bottom: 0.5rem;">Running Optimization...</p>
+                         <p style="font-size: 0.9em; margin-top: 0;">(This may take up to a minute)</p>
+                         <div class="spinner"></div>
+                    </div>
+                    <div id="results-container" class="hidden">
+                        <div id="break-even-result">
+                            <p id="break-even-text-result"></p>
+                            <div id="additional-metrics-container"></div>
+                            <div id="monte-carlo-results-container"></div>
+                        </div>
+                        
+                        <div id="graph-container" class="hidden">
+                             <h3>Asset Comparison Graph</h3> 
+                             <svg id="results-chart"></svg>
+                        </div>
 
-        // --- 2. Calculate Income ---
-        if (typeof step2_CalculateIncome === 'function') {
-            step2_CalculateIncome(yearData.user, scenario.user, settings, 'user', currentYear, scenario); 
-            if (hasSpouse) {
-                step2_CalculateIncome(yearData.spouse, scenario.user, settings, 'spouse', currentYear, scenario);
-            }
-        }
-        
-        yearData.income.dividends = yearData.dividends.total;
-        yearData.income.pension = (yearData.user.income?.pension || 0) + (yearData.spouse.income?.pension || 0);
-        yearData.income.other = (yearData.user.income?.other_taxable || 0) + (yearData.user.income?.other_non_remitted || 0) + 
-                                (yearData.spouse.income?.other_taxable || 0) + (yearData.spouse.income?.other_non_remitted || 0);
-        yearData.income.total = (yearData.user.income?.total || 0) + 
-                                (yearData.spouse.income?.total || 0) + 
-                                (yearData.dividends.total || 0);
+                        <div id="mc-graph-container-area" class="hidden">
+                             <div id="mc-graph-a-container" class="mc-graph-container">
+                                 <h3 data-lang-key="mcGraphTitleA">Monte Carlo Graph (Scenario A)</h3> 
+                                 <svg id="mc-chart-a"></svg>
+                             </div>
+                             <div id="mc-graph-b-container" class="mc-graph-container">
+                                 <h3 data-lang-key="mcGraphTitleB">Monte Carlo Graph (Scenario B)</h3> 
+                                 <svg id="mc-chart-b"></svg>
+                             </div>
+                        </div>
 
-        // --- 3. Calculate Expenses (Includes Survival Tightening Rule) ---
-        step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouseBirthYear, currentUserAssets, currentSpouseAssets);
-        yearData.expenses = (yearData.expenses || 0) + (yearData.expenses_thai_tax || 0);
+                        <div class="detailed-table-section">
+                            <div class="table-controls">
+                                <button id="toggle-graph-btn" type="button" class="hidden" data-lang-key="toggleGraphBtn">Show/Hide Graph</button>
+                                <button id="toggle-details-a-btn" type="button" class="hidden">[A] Details</button>
+                                <button id="toggle-details-b-btn" type="button" class="hidden">[B] Details</button>
+                                <button id="export-csv-btn" type="button" class="hidden" data-lang-key="exportCsvBtn">Export to CSV</button>
+                            </div>
+                            <div id="detailed-table-container-a" class="hidden" style="margin-top: 1rem;"></div>
+                            <div id="detailed-table-container-b" class="hidden" style="margin-top: 1rem;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
 
-        // --- 4. Calculate Taxes FIRST (Accurate Deduction Pipeline) ---
-        let userTaxInfo = { totalTax: 0, tax_can: 0, tax_thai: 0 };
-        if (typeof step5_CalculateTaxes === 'function') {
-            userTaxInfo = step5_CalculateTaxes(yearData.user, scenario, settings, 'user');
-        }
-        yearData.user.tax = userTaxInfo;
-        
-        let spouseTaxInfo = { totalTax: 0, tax_can: 0, tax_thai: 0 };
-        if (hasSpouse && typeof step5_CalculateTaxes === 'function') {
-            spouseTaxInfo = step5_CalculateTaxes(yearData.spouse, scenario, settings, 'spouse');
-            yearData.spouse.tax = spouseTaxInfo;
-        }
+        <footer>
+            <div class="footer-credits"> <p>© 2025 dluvbell. All Rights Reserved.</p> <p data-lang-key="createdBy">Created by <a href="https://github.com/dluvbell" target="_blank" rel="noopener noreferrer">dluvbell</a>.</p> </div>
+            <h3 data-lang-key="disclaimerTitle">Disclaimer</h3>
+            <p data-lang-key="disclaimerP1">For information only.</p>
+            <p data-lang-key="disclaimerP2">Results are estimates. Not financial advice.</p>
+            <p data-lang-key="disclaimerP3">Consult a professional specific to international tax.</p>
+        </footer>
+    </div>
 
-        yearData.taxPayable = userTaxInfo.totalTax + spouseTaxInfo.totalTax + yearData.dividends.totalWht;
-        yearData.taxPayable_can = userTaxInfo.tax_can + spouseTaxInfo.tax_can + yearData.dividends.totalWht;
-        yearData.taxPayable_thai = userTaxInfo.tax_thai + spouseTaxInfo.tax_thai;
+     <div id="welcome-modal" class="modal">
+         <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 data-lang-key="welcomeTitle">Welcome!</h2>
+            <p data-lang-key="welcomeP1">This tool helps you compare two potential retirement scenarios.</p>
+            <h3 data-lang-key="resultsHeader">Key Features & Calculations:</h3>
+            <p data-lang-key="resultsP1">The simulator calculates year-by-year projections based on your inputs for two different scenarios (A and B).</p>
+            <p data-lang-key="resultsP2">Results include asset growth, income sources, expenses, withdrawals according to your strategy, and estimated taxes.</p>
+            <h3 data-lang-key="disclaimerTitle">Disclaimer</h3>
+            <p data-lang-key="disclaimerP2">Results are estimates based on provided inputs and assumptions. This is not financial advice.</p>
+             <p data-lang-key="disclaimerP3">Consult with a qualified financial professional before making any decisions.</p>
+            <div class="agreement-section">
+                <input type="checkbox" id="disclaimer-agree">
+                <label for="disclaimer-agree" data-lang-key="agreeLabel">I understand and agree.</label>
+            </div>
+            <button id="agree-btn" type="button" data-lang-key="confirmBtn" disabled>Confirm</button>
+         </div>
+     </div>
 
-        // --- 5. Perform Withdrawals (Sell accurate Shortfall) ---
-        let wdInfo = { depleted: false, total: 0 };
-        if (typeof step4_PerformWithdrawals === 'function') {
-            wdInfo = step4_PerformWithdrawals(yearData, currentUserAssets, currentSpouseAssets, hasSpouse, settings);
-        }
-        
-        yearData.withdrawals.total = wdInfo.withdrawals ? wdInfo.withdrawals.total : (yearData.withdrawals.total || 0);
+     <div id="income-modal" class="modal hidden">
+         <div class="modal-content">
+             <span class="close-button">&times;</span>
+             <h2 data-lang-key="modalTitle">Manage Income & Expenses (A)</h2>
+             <div id="income-list"></div>
+             <hr>
+             <h3 data-lang-key="modalAddTitle">Add/Edit Item</h3>
+             <div id="add-income-form" class="form-grid-modal">
+                 <input type="hidden" id="income-id">
+                 <div class="form-group">
+                    <label for="income-owner">Owner</label>
+                    <select id="income-owner">
+                        <option value="user">User (Me)</option>
+                        <option value="spouse">Spouse</option>
+                        <option value="joint">Joint (50/50)</option>
+                    </select>
+                 </div>
+                 <div class="form-group">
+                    <label for="income-type" data-lang-key="incomeTypeLabel">Type</label>
+                    <select id="income-type">
+                        <option value="pension" data-lang-key="incomeTypePension">Income: Pension (Tax Exempt in Malaysia)</option>
+                        <option value="income" data-lang-key="incomeTypeOther">Income: Other (Taxable in Malaysia)</option>
+                        <option value="income_overseas" data-lang-key="incomeTypeOverseas">Income: Other (Overseas/Not Remitted)</option>
+                        <option value="expense_malaysia" data-lang-key="expenseTypeMalaysia">Expense: Malaysia Living</option>
+                        <option value="expense_special" data-lang-key="expenseTypeSpecial">Expense: Special (Exempt from Survival Rule)</option>
+                        <option value="expense_overseas" data-lang-key="expenseTypeOverseas">Expense: Overseas Travel (Not Remitted)</option>
+                    </select>
+                </div>
+                 <div class="form-group"><label for="income-desc" data-lang-key="incomeDescLabel">Description</label><input type="text" id="income-desc"></div>
+                 <div class="form-group"><label for="income-amount" data-lang-key="incomeAmountLabel">Amount (PV)</label><input type="number" id="income-amount"><div class="future-value-display" id="future-value-display"></div></div>
+                 <div class="form-group"><label for="income-start-age" data-lang-key="incomeStartAgeLabel">Start Age</label><input type="number" id="income-start-age"></div>
+                 <div class="form-group"><label for="income-end-age" data-lang-key="incomeEndAgeLabel">End Age</label><input type="number" id="income-end-age"></div>
+                 <div class="form-group">
+                    <label for="income-cola" data-lang-key="incomeColaLabel">COLA (%)</label>
+                    <span class="tooltip" data-lang-key-tooltip="incomeColaTooltip">?</span>
+                    <input type="number" id="income-cola" placeholder="0" step="0.1">
+                </div>
+                </div>
+             <button id="save-income-btn" type="button" data-lang-key="saveIncomeBtn">Save</button>
+         </div>
+     </div>
+     <div id="income-modal_b" class="modal hidden">
+         <div class="modal-content">
+             <span class="close-button">&times;</span>
+             <h2 data-lang-key="modalTitle">Manage Income & Expenses (B)</h2>
+             <div id="income-list_b"></div>
+             <hr>
+             <h3 data-lang-key="modalAddTitle">Add/Edit Item</h3>
+             <div id="add-income-form_b" class="form-grid-modal">
+                 <input type="hidden" id="income-id_b">
+                 <div class="form-group">
+                    <label for="income-owner_b">Owner</label>
+                    <select id="income-owner_b">
+                        <option value="user">User (Me)</option>
+                        <option value="spouse">Spouse</option>
+                        <option value="joint">Joint (50/50)</option>
+                    </select>
+                 </div>
+                 <div class="form-group">
+                    <label for="income-type_b" data-lang-key="incomeTypeLabel">Type</label>
+                     <select id="income-type_b">
+                        <option value="pension" data-lang-key="incomeTypePension">Income: Pension (Tax Exempt in Malaysia)</option>
+                        <option value="income" data-lang-key="incomeTypeOther">Income: Other (Taxable in Malaysia)</option>
+                        <option value="income_overseas" data-lang-key="incomeTypeOverseas">Income: Other (Overseas/Not Remitted)</option>
+                        <option value="expense_malaysia" data-lang-key="expenseTypeMalaysia">Expense: Malaysia Living</option>
+                        <option value="expense_special" data-lang-key="expenseTypeSpecial">Expense: Special (Exempt from Survival Rule)</option>
+                        <option value="expense_overseas" data-lang-key="expenseTypeOverseas">Expense: Overseas Travel (Not Remitted)</option>
+                    </select>
+                </div>
+                 <div class="form-group"><label for="income-desc_b" data-lang-key="incomeDescLabel">Description</label><input type="text" id="income-desc_b"></div>
+                 <div class="form-group"><label for="income-amount_b" data-lang-key="incomeAmountLabel">Amount (PV)</label><input type="number" id="income-amount_b"><div class="future-value-display" id="future-value-display_b"></div></div>
+                 <div class="form-group"><label for="income-start-age_b" data-lang-key="incomeStartAgeLabel">Start Age</label><input type="number" id="income-start-age_b"></div>
+                 <div class="form-group"><label for="income-end-age_b" data-lang-key="incomeEndAgeLabel">End Age</label><input type="number" id="income-end-age_b"></div>
+                 <div class="form-group">
+                    <label for="income-cola_b" data-lang-key="incomeColaLabel">COLA (%)</label>
+                    <span class="tooltip" data-lang-key-tooltip="incomeColaTooltip">?</span>
+                    <input type="number" id="income-cola_b" placeholder="0" step="0.1">
+                </div>
+                </div>
+             <button id="save-income-btn_b" type="button" data-lang-key="saveIncomeBtn">Save</button>
+         </div>
+     </div>
 
-        // ✅ Reinvest Logic (1st Priority Dynamic Asset)
-        const totalCashOut = yearData.expenses + yearData.taxPayable; 
-        const totalCashIn = yearData.income.total + yearData.withdrawals.total;
-        const netCashflow = totalCashIn - totalCashOut;
+    <template id="dynamic-asset-template">
+        <div class="asset-row dynamic-asset" style="border: 1px solid var(--border-color); padding: 15px; margin-bottom: 10px; border-radius: 8px; position: relative;">
+            <button type="button" class="btn-remove-asset" style="position: absolute; top: 10px; right: 10px; background: var(--danger-color); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Remove</button>
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label>Asset Name</label>
+                <input type="text" class="asset-name" value="Asset" style="width: 200px; font-weight: bold;">
+            </div>
+            <div class="asset-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px;">
+                <div>
+                    <label>Type</label>
+                    <select class="asset-type">
+                        <option value="equity">Equity (주식)</option>
+                        <option value="covered_call">Covered Call</option>
+                    </select>
+                </div>
+                <div><label>Balance ($)</label><input type="number" class="asset-bal" value="0"></div>
+                <div><label>Growth (%)</label><input type="number" class="asset-growth" value="5.0" step="0.1"></div>
+                <div><label>Vol (Std %)</label><input type="number" class="asset-stdev" value="12.0" step="0.1"></div>
+                <div><label>Div Yield (%)</label><input type="number" class="asset-div" value="4.0" step="0.1"></div>
+                <div><label>Div Growth (%)</label><input type="number" class="asset-div-growth" value="5.0" step="0.1"></div>
+                <div><label>Min Yield (%)</label><input type="number" class="asset-min-yield" value="7.0" step="0.1" title="For Covered Call"></div>
+                <div><label>Max Yield (%)</label><input type="number" class="asset-max-yield" value="15.0" step="0.1" title="For Covered Call"></div>
+                <div><label>WHT (%)</label><input type="number" class="asset-wht" value="15.0" step="0.1"></div>
+            </div>
+        </div>
+    </template>
 
-        if (netCashflow > 0.01) {
-            if (currentUserAssets.length > 0) {
-                currentUserAssets[0].equity += netCashflow;
-            } else if (hasSpouse && currentSpouseAssets.length > 0) {
-                currentSpouseAssets[0].equity += netCashflow;
-            }
-            yearData.reinvested = netCashflow;
-        } else {
-            yearData.reinvested = 0;
-        }
-
-        // Final Balance Update
-        yearData.user.closingBalance = _flattenAssets(currentUserAssets);
-        yearData.spouse.closingBalance = _flattenAssets(currentSpouseAssets);
-        yearData.closingBalance = yearData.user.closingBalance + yearData.spouse.closingBalance;
-
-        // Split Asset Data for UI
-        yearData.assetsSplit.standard_equity = _getAssetTypeTotal(currentUserAssets, 'equity') + _getAssetTypeTotal(currentSpouseAssets, 'equity');
-        yearData.assetsSplit.covered_call = _getAssetTypeTotal(currentUserAssets, 'covered_call') + _getAssetTypeTotal(currentSpouseAssets, 'covered_call');
-        yearData.assetsSplit.total = yearData.assetsSplit.standard_equity + yearData.assetsSplit.covered_call;
-
-        results.push(yearData);
-
-        prevYearThaiTax_User = yearData.user.tax.tax_thai;
-        prevYearThaiTax_Spouse = spouseTaxInfo.tax_thai;
-    }
-    return results;
-}
-
-// Helper: Flatten dynamic asset array
-function _flattenAssets(assetsArr) {
-    if (!Array.isArray(assetsArr)) return 0;
-    return assetsArr.reduce((sum, a) => sum + (a.equity || 0), 0);
-}
-
-// Helper: Get specific asset type total
-function _getAssetTypeTotal(assetsArr, targetType) {
-    if (!Array.isArray(assetsArr)) return 0;
-    return assetsArr.filter(a => a.type === targetType).reduce((sum, a) => sum + (a.equity || 0), 0);
-}
-
-
-// --- TWO-TRACK ENGINE FOR DETERMINISTIC RUNS ---
-function step1_ApplyGrowth(currentAssets, settings, crashOverride = null, vixCrushOverride = false) {
-    let totalGrowth = 0;
-    let totalDiv = 0;
-    let totalDivWht = 0;
-
-    if (!Array.isArray(currentAssets)) return { gains: 0, totalDiv: 0, totalDivWht: 0 };
-
-    currentAssets.forEach((asset) => {
-        let equityReturn = (crashOverride !== null) ? crashOverride : (asset.growth !== undefined ? asset.growth : 0.05);
-        
-        if (asset.type === 'covered_call') {
-            let ccYieldMultiplier = 'base';
-            if (crashOverride !== null) {
-                if (equityReturn <= -0.15) ccYieldMultiplier = 'max';
-                else if (equityReturn < 0) ccYieldMultiplier = 'scale';
-            }
-
-            const equityGain = asset.equity * equityReturn;
-            asset.equity += equityGain;
-            totalGrowth += equityGain;
-
-            if (asset.currentNav !== undefined) {
-                asset.currentNav *= (1 + equityReturn);
-                if (asset.maxNav === undefined) asset.maxNav = 100.0;
-                asset.maxNav = Math.max(asset.maxNav, asset.currentNav);
-            }
-
-            let currentYield = asset.initialDiv || 0.07;
-            let maxYield = asset.maxYield || 0.15;
-            let minYield = asset.minYield || 0.07; 
-
-            if (vixCrushOverride) {
-                currentYield = minYield;
-            } else if (ccYieldMultiplier === 'max') {
-                currentYield = maxYield;
-            } else if (ccYieldMultiplier === 'scale') {
-                const dropPct = Math.abs(equityReturn);
-                const ratio = Math.min(dropPct / 0.15, 1.0);
-                currentYield = asset.initialDiv + (maxYield - asset.initialDiv) * ratio;
-            }
-
-            asset.currentDynamicYield = currentYield;
-            let grossDiv = asset.equity * currentYield;
-            totalDiv += grossDiv;
-            totalDivWht += grossDiv * (asset.wht !== undefined ? asset.wht : 0.15);
-
-        } else {
-            const equityGain = asset.equity * equityReturn;
-            asset.equity += equityGain;
-            totalGrowth += equityGain;
-
-            if (asset.currentNav !== undefined) {
-                asset.currentNav *= (1 + equityReturn);
-                if (asset.maxNav === undefined) asset.maxNav = 100.0;
-                asset.maxNav = Math.max(asset.maxNav, asset.currentNav);
-            }
-
-            let appliedDivGrowth = (asset.divGrowth || 0);
-            let cutRate = 0;
-
-            if (equityReturn <= -0.30) {
-                 cutRate = Math.abs(equityReturn) / 2;
-                 appliedDivGrowth = 0; 
-            } else if (equityReturn <= -0.10) {
-                 appliedDivGrowth = 0;
-            }
-
-            let currentYield = asset.initialDiv || 0;
-            currentYield = currentYield * (1 - cutRate) * (1 + appliedDivGrowth);
-            asset.initialDiv = currentYield;
-
-            asset.currentDynamicYield = currentYield;
-            let grossDiv = asset.equity * currentYield;
-            totalDiv += grossDiv;
-            totalDivWht += grossDiv * (asset.wht !== undefined ? asset.wht : 0.15);
-        }
-    });
-
-    return { gains: totalGrowth, totalDiv: totalDiv, totalDivWht: totalDivWht };
-}
-
-function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouseBirthYear, currentUserAssets, currentSpouseAssets) {
-    const currentYear = yearData.year; 
-    const baseYear = settings.baseYear || 2025;
-    const currentUserAge = Number(yearData.userAge);
-    
-    const allItems = scenario.user?.otherIncomes || [];
-    let baseLivingExpenses = 0;
-    let specialExpenses = 0;
-    let overseasExpenses = 0;
-
-    for (const item of allItems) {
-         if (item.type !== 'expense_malaysia' && item.type !== 'expense_thai' && item.type !== 'expense_overseas' && item.type !== 'expense_living' && item.type !== 'expense_special') continue;
-         const startAge = Number(item.startAge) || 0;
-         const endAge = (Number(item.endAge) > 0) ? Number(item.endAge) : 110;
-         const amount = Number(item.amount) || 0;
-         const cola = Number(item.cola) || 0;
-
-         let isActive = false;
-         if (item.owner === 'spouse' && hasSpouse) {
-             const currentSpouseAge = currentYear - Number(spouseBirthYear);
-             if (currentSpouseAge >= startAge && currentSpouseAge <= endAge) isActive = true;
-         } else {
-             if (currentUserAge >= startAge && currentUserAge <= endAge) isActive = true;
-         }
-
-         if (isActive) {
-             const yearsSinceBase = Math.max(0, currentYear - baseYear);
-             const inflatedAmount = amount * Math.pow(1 + cola, yearsSinceBase);
-             
-             if (item.type === 'expense_overseas') {
-                 overseasExpenses += inflatedAmount;
-             } else if (item.type === 'expense_special') {
-                 specialExpenses += inflatedAmount;
-             } else {
-                 baseLivingExpenses += inflatedAmount;
-             }
-         }
-    }
-    
-    yearData.expenses = baseLivingExpenses + specialExpenses + overseasExpenses;
-
-    // --- 🚨 SURVIVAL TIGHTENING RULE (Unlimited Tiers by Max Drawdown %) ---
-    const cw = settings.survivalConfig || {};
-    const tiers = settings.survivalTiers || [];
-    
-    if (cw.survival_enable && tiers.length > 0) {
-        let maxDrawdown = 0;
-        const allAssets = (currentUserAssets || []).concat(currentSpouseAssets || []);
-        
-        for (const a of allAssets) {
-            if (a.type === 'covered_call' && a.currentNav !== undefined && a.maxNav !== undefined && a.maxNav > 0) {
-                const drawdown = ((a.maxNav - a.currentNav) / a.maxNav) * 100;
-                if (drawdown > maxDrawdown) {
-                    maxDrawdown = drawdown;
-                }
-            }
-        }
-        
-        if (maxDrawdown > 0) {
-            // 정렬: 하락률(Trigger)이 가장 높은 것(예: 30% -> 20% -> 10%)부터 순서대로 검사
-            const sortedTiers = [...tiers].sort((a, b) => b.trigger - a.trigger);
-            let appliedTier = null;
-            
-            for (const t of sortedTiers) {
-                if (maxDrawdown >= t.trigger) {
-                    appliedTier = t;
-                    break;
-                }
-            }
-
-            if (appliedTier) {
-                const yearsSinceBase = Math.max(0, currentYear - baseYear);
-                const inflatedTightened = appliedTier.expense * Math.pow(1 + (settings.cola || 0.025), yearsSinceBase);
-                yearData.expenses = inflatedTightened + specialExpenses + overseasExpenses;
-                yearData.isSurvivalTightened = true; 
-                yearData.strategyState = `🚨 Tightened (Drop>=${appliedTier.trigger}%)`;
-            }
-        }
-    }
-}
+    <script src="https://d3js.org/d3.v7.min.js"></script> 
+    <script src="data.js"></script>
+    <script src="incomeTaxEngine.js"></script>
+    <script src="withdrawalEngine.js"></script>
+    <script src="engineCore.js"></script>
+    <script src="monteCarloEngine.js"></script>
+    <script src="uiCore.js"></script> 
+    <script src="uiDataHandler.js"></script>
+    <script src="uiIncomeModal.js"></script>
+    <script src="uiResultsDisplay.js"></script> 
+    <script src="uiOptimizationDisplay.js"></script> 
+    <script src="uiMonteCarloDisplay.js"></script> 
+</body>
+</html>
