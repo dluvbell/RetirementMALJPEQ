@@ -1,9 +1,9 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.7.0 (Fix: Max Drawdown (MDD) based Unlimited Multi-Tier Survival Logic)
+ * @version     18.6.0 (Fix: Unlimited Multi-Tier Survival Logic)
  * @file        engineCore.js
- * @description Core simulation loop. Integrated Two-Track engine and MDD-based survival trigger.
+ * @description Core simulation loop. Integrated Two-Track engine and NAV-based survival trigger.
  */
 
 // engineCore.js
@@ -49,8 +49,8 @@ function simulateScenario(scenario, settings, label = "") {
     let currentUserAssets = Array.isArray(scenario.user?.assets) ? JSON.parse(JSON.stringify(scenario.user.assets)) : [];
     let currentSpouseAssets = Array.isArray(scenario.spouse?.assets) ? JSON.parse(JSON.stringify(scenario.spouse.assets)) : [];
     
-    currentUserAssets.forEach(a => { a.equity = a.balance || 0; a.currentNav = 100.0; a.maxNav = 100.0; });
-    currentSpouseAssets.forEach(a => { a.equity = a.balance || 0; a.currentNav = 100.0; a.maxNav = 100.0; });
+    currentUserAssets.forEach(a => { a.equity = a.balance || 0; a.currentNav = 100.0; });
+    currentSpouseAssets.forEach(a => { a.equity = a.balance || 0; a.currentNav = 100.0; });
 
     let prevYearThaiTax_User = 0;
     let prevYearThaiTax_Spouse = 0;
@@ -255,11 +255,7 @@ function step1_ApplyGrowth(currentAssets, settings, crashOverride = null, vixCru
             asset.equity += equityGain;
             totalGrowth += equityGain;
 
-            if (asset.currentNav !== undefined) {
-                asset.currentNav *= (1 + equityReturn);
-                if (asset.maxNav === undefined) asset.maxNav = 100.0;
-                asset.maxNav = Math.max(asset.maxNav, asset.currentNav);
-            }
+            if (asset.currentNav !== undefined) asset.currentNav *= (1 + equityReturn);
 
             let currentYield = asset.initialDiv || 0.07;
             let maxYield = asset.maxYield || 0.15;
@@ -285,11 +281,7 @@ function step1_ApplyGrowth(currentAssets, settings, crashOverride = null, vixCru
             asset.equity += equityGain;
             totalGrowth += equityGain;
 
-            if (asset.currentNav !== undefined) {
-                asset.currentNav *= (1 + equityReturn);
-                if (asset.maxNav === undefined) asset.maxNav = 100.0;
-                asset.maxNav = Math.max(asset.maxNav, asset.currentNav);
-            }
+            if (asset.currentNav !== undefined) asset.currentNav *= (1 + equityReturn);
 
             let appliedDivGrowth = (asset.divGrowth || 0);
             let cutRate = 0;
@@ -356,30 +348,26 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
     
     yearData.expenses = baseLivingExpenses + specialExpenses + overseasExpenses;
 
-    // --- 🚨 SURVIVAL TIGHTENING RULE (Unlimited Tiers by Max Drawdown %) ---
+    // --- 🚨 SURVIVAL TIGHTENING RULE (Unlimited Tiers by NAV) ---
     const cw = settings.survivalConfig || {};
     const tiers = settings.survivalTiers || [];
     
     if (cw.survival_enable && tiers.length > 0) {
-        let maxDrawdown = 0;
+        let lowestNav = Infinity;
         const allAssets = (currentUserAssets || []).concat(currentSpouseAssets || []);
         
         for (const a of allAssets) {
-            if (a.type === 'covered_call' && a.currentNav !== undefined && a.maxNav !== undefined && a.maxNav > 0) {
-                const drawdown = ((a.maxNav - a.currentNav) / a.maxNav) * 100;
-                if (drawdown > maxDrawdown) {
-                    maxDrawdown = drawdown;
-                }
+            if (a.type === 'covered_call' && a.currentNav < lowestNav) {
+                lowestNav = a.currentNav;
             }
         }
         
-        if (maxDrawdown > 0) {
-            // 정렬: 하락률(Trigger)이 가장 높은 것(예: 30% -> 20% -> 10%)부터 순서대로 검사
-            const sortedTiers = [...tiers].sort((a, b) => b.trigger - a.trigger);
+        if (lowestNav !== Infinity) {
+            const sortedTiers = [...tiers].sort((a, b) => a.trigger - b.trigger);
             let appliedTier = null;
             
             for (const t of sortedTiers) {
-                if (maxDrawdown >= t.trigger) {
+                if (lowestNav < t.trigger) {
                     appliedTier = t;
                     break;
                 }
@@ -390,7 +378,7 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
                 const inflatedTightened = appliedTier.expense * Math.pow(1 + (settings.cola || 0.025), yearsSinceBase);
                 yearData.expenses = inflatedTightened + specialExpenses + overseasExpenses;
                 yearData.isSurvivalTightened = true; 
-                yearData.strategyState = `🚨 Tightened (Drop>=${appliedTier.trigger}%)`;
+                yearData.strategyState = `🚨 Tightened (NAV<${appliedTier.trigger})`;
             }
         }
     }

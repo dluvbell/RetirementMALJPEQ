@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.4.0 (Fix: Unlimited Survival Tiers by MDD/Drawdown & Backward Compatibility)
+ * @version     16.3.0 (Fix: Unlimited Survival Tiers & Backward Compatibility)
  * @file        uiDataHandler.js
  * @description Manages data sync, save/load, and dynamic asset UI binding.
  */
@@ -442,7 +442,7 @@ function _renderSurvivalTiers(s) {
         div.style.fontSize = '0.9em';
         
         div.innerHTML = `
-            <span style="color: var(--danger-color);">Drop >= <strong>${item.trigger}%</strong> ➡️ Expense: <strong>$${item.expense.toLocaleString()}</strong></span>
+            <span style="color: var(--danger-color);">NAV < <strong>${item.trigger}</strong> ➡️ Expense: <strong>$${item.expense.toLocaleString()}</strong></span>
             <button type="button" onclick="_removeSurvivalTier('${s}', ${index})" style="margin-left:8px; padding:0 4px; font-size:0.8em; background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;">x</button>
         `;
         container.appendChild(div);
@@ -693,19 +693,17 @@ function populateUIFromLoadedData(data) {
     manualVixA.length = 0; if(data.vix_a) manualVixA.push(...data.vix_a);
     manualVixB.length = 0; if(data.vix_b) manualVixB.push(...data.vix_b);
     
-    // Backward Compatibility for Survival Tiers (Convert old NAV to Drop %)
+    // Backward Compatibility for Survival Tiers
     survivalTiersA.length = 0; 
     if(data.tiers_a) { survivalTiersA.push(...data.tiers_a); } 
     else if(data.strategy_a && data.strategy_a.survival_trigger) { 
-        const dropA = 100 - data.strategy_a.survival_trigger;
-        survivalTiersA.push({ trigger: dropA > 0 ? dropA : 20, expense: data.strategy_a.survival_expense || 41000 }); 
+        survivalTiersA.push({ trigger: data.strategy_a.survival_trigger, expense: data.strategy_a.survival_expense || 41000 }); 
     }
     
     survivalTiersB.length = 0; 
     if(data.tiers_b) { survivalTiersB.push(...data.tiers_b); } 
     else if(data.strategy_b && data.strategy_b.survival_trigger) { 
-        const dropB = 100 - data.strategy_b.survival_trigger;
-        survivalTiersB.push({ trigger: dropB > 0 ? dropB : 20, expense: data.strategy_b.survival_expense || 41000 }); 
+        survivalTiersB.push({ trigger: data.strategy_b.survival_trigger, expense: data.strategy_b.survival_expense || 41000 }); 
     }
 
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };

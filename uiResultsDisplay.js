@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.5.1 (Fix: Intuitive Column Order Reorganization without Refactoring)
+ * @version     14.4.0 (Feature: Separated Pension and Other Income columns)
  * @file        uiResultsDisplay.js
  * @created     2025-11-09
  * @description Displays results with clean dynamic array columns and restored D3 chart.
@@ -162,12 +162,12 @@ function displaySeparatedDetailedTables(results) {
         { key: 'eqTotal', label: 'Eq (주식)', prop: 'assetsSplit.standard_equity' },
         { key: 'ccTotal', label: 'CC (커버드콜)', prop: 'assetsSplit.covered_call' },
         { key: 'divTotal', label: 'Dividends', prop: 'dividends.total' },
+        { key: 'reinvest', label: 'Reinvested', prop: 'reinvested' },
         { key: 'pension', label: 'Pension', prop: 'income.pension' },
         { key: 'otherInc', label: 'Other Inc', prop: 'income.other' },
         { key: 'incomeTotal', label: lang.colIncomeTotal, prop: 'income.total' },
         { key: 'expTotal', label: lang.colExpenses, prop: 'expenses' },
         { key: 'taxTotal', label: lang.colTaxesPaid, prop: 'taxPayable' },
-        { key: 'reinvest', label: 'Reinvested', prop: 'reinvested' },
         { key: 'wdTotal', label: lang.colWdTotal, prop: 'withdrawals.total' }
     ];
 
@@ -235,12 +235,12 @@ function exportToCsv(results, inputsA, inputsB) {
         { label: "Eq (Stock)", prop: 'assetsSplit.standard_equity' },
         { label: "CC (Covered Call)", prop: 'assetsSplit.covered_call' },
         { label: "Total Dividends", prop: 'dividends.total' },
+        { label: "Reinvested", prop: 'reinvested' },
         { label: "Pension", prop: 'income.pension' },
         { label: "Other Inc", prop: 'income.other' },
         { label: "Total Income", prop: 'income.total' },
         { label: "Total Expenses", prop: 'expenses' },
         { label: "Total Taxes", prop: 'taxPayable' },
-        { label: "Reinvested", prop: 'reinvested' },
         { label: "WD: Total", prop: 'withdrawals.total' }
     ];
 
