@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.1.0 (Feature: Manual VIX Crush Events)
+ * @version     16.2.0 (Fix: JSON Load Array Reference Severing Bug)
  * @file        uiDataHandler.js
  * @description Manages data sync, save/load, and dynamic asset UI binding.
  */
@@ -321,7 +321,6 @@ function _setupVixListLogic(s) {
         if (age > 0) {
             const list = (s === 'a') ? manualVixA : manualVixB;
             const newItem = { age };
-            // Avoid duplicates
             if (!list.some(v => v.age === age)) {
                 list.push(newItem);
                 list.sort((a,b) => a.age - b.age);
@@ -428,7 +427,12 @@ window._removeVix = function(s, index) {
 function gatherInputs(scenarioSuffix) {
     const s = scenarioSuffix;
     const dataStore = (s === 'a') ? scenarioAData : scenarioBData;
-    let incomesAndExpenses = (s === 'a') ? otherIncomes_a : otherIncomes_b;
+    let incomesAndExpenses = [];
+    if (s === 'a') {
+        incomesAndExpenses = typeof otherIncomes_a !== 'undefined' ? otherIncomes_a : window.otherIncomes_a || [];
+    } else {
+        incomesAndExpenses = typeof otherIncomes_b !== 'undefined' ? otherIncomes_b : window.otherIncomes_b || [];
+    }
     let crashes = (s === 'a') ? manualCrashesA : manualCrashesB;
     let vixes = (s === 'a') ? manualVixA : manualVixB;
 
@@ -522,7 +526,7 @@ function handleSaveScenarioClick() {
     const dataToSave = _gatherSaveObj();
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); 
-    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v16_1.json'; 
+    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v16_2.json'; 
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -551,7 +555,12 @@ function handleFileSelected(event) {
             isRestoring = false;
             alert("Invalid file format."); 
         } 
-        event.target.value = null; 
+        const fileInput = document.getElementById('scenario-file-input');
+        if (fileInput) fileInput.value = null;
+    };
+    reader.onerror = () => { 
+        const fileInput = document.getElementById('scenario-file-input');
+        if (fileInput) fileInput.value = null; 
     };
     reader.readAsText(file);
 }
@@ -574,9 +583,11 @@ function _gatherSaveObj() {
         vix_a: manualVixA,
         vix_b: manualVixB,
 
-        scenarioAData: scenarioAData, otherIncomes_a: otherIncomes_a,
+        scenarioAData: scenarioAData, 
+        otherIncomes_a: typeof otherIncomes_a !== 'undefined' ? otherIncomes_a : window.otherIncomes_a || [],
         retirementAge_a: getVal('retirementAge_a'),
-        scenarioBData: scenarioBData, otherIncomes_b: otherIncomes_b,
+        scenarioBData: scenarioBData, 
+        otherIncomes_b: typeof otherIncomes_b !== 'undefined' ? otherIncomes_b : window.otherIncomes_b || [],
         retirementAge_b: getVal('retirementAge_b')
     };
 }
@@ -587,12 +598,22 @@ function populateUIFromLoadedData(data) {
     scenarioAData = JSON.parse(JSON.stringify(data.scenarioAData)); 
     scenarioBData = JSON.parse(JSON.stringify(data.scenarioBData));
     
-    otherIncomes_a = data.otherIncomes_a || []; 
-    otherIncomes_b = data.otherIncomes_b || [];
-    manualCrashesA = data.crashes_a || []; 
-    manualCrashesB = data.crashes_b || []; 
-    manualVixA = data.vix_a || [];
-    manualVixB = data.vix_b || [];
+    if (typeof otherIncomes_a !== 'undefined') {
+        otherIncomes_a.length = 0; if (data.otherIncomes_a) otherIncomes_a.push(...data.otherIncomes_a);
+    } else {
+        window.otherIncomes_a = data.otherIncomes_a || [];
+    }
+
+    if (typeof otherIncomes_b !== 'undefined') {
+        otherIncomes_b.length = 0; if (data.otherIncomes_b) otherIncomes_b.push(...data.otherIncomes_b);
+    } else {
+        window.otherIncomes_b = data.otherIncomes_b || [];
+    }
+
+    manualCrashesA.length = 0; if(data.crashes_a) manualCrashesA.push(...data.crashes_a);
+    manualCrashesB.length = 0; if(data.crashes_b) manualCrashesB.push(...data.crashes_b);
+    manualVixA.length = 0; if(data.vix_a) manualVixA.push(...data.vix_a);
+    manualVixB.length = 0; if(data.vix_b) manualVixB.push(...data.vix_b);
 
     const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
     const setCheck = (id, val) => { const el = document.getElementById(id); if(el) el.checked = !!val; };
