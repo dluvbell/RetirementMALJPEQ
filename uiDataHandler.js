@@ -1,482 +1,801 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="author" content="dluvbell">
-    <title data-lang-key="pageTitle">Canada-Malaysia Retirement (Non-Resident)</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+/**
+ * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
+ * @author      dluvbell (https://github.com/dluvbell)
+ * @version     16.4.0 (Fix: Unlimited Survival Tiers by MDD/Drawdown & Backward Compatibility)
+ * @file        uiDataHandler.js
+ * @description Manages data sync, save/load, and dynamic asset UI binding.
+ */
 
-    <div class="container">
-        <header>
-            <h1 data-lang-key="mainTitle">Canada to Malaysia Retirement</h1>
-            <p data-lang-key="subTitle">Simulate non-resident retirement in Malaysia (Single Person).</p>
-            <div class="header-controls">
-                <div class="theme-switch-wrapper">
-                    <label class="theme-switch" for="theme-toggle">
-                        <input type="checkbox" id="theme-toggle" />
-                        <div class="slider round"></div>
-                    </label>
-                    <span data-lang-key="darkModeLabel">Dark Mode</span>
-                </div>
-                
-                <button id="load-scenario-btn" type="button" class="btn-secondary" data-lang-key="loadScenarioBtn">Load Scenario</button>
-                <button id="save-scenario-btn" type="button" class="btn-secondary" data-lang-key="saveScenarioBtn">Save Scenario</button>
-                <input type="file" id="scenario-file-input" accept=".json" style="display: none;">
-            </div>
-        </header>
+// uiDataHandler.js
 
-        <nav class="tab-nav">
-            <button class="tab-btn active" data-tab="scenarioA" data-lang-key="tabScenarioA">Scenario A</button>
-            <button class="tab-btn" data-tab="scenarioB" data-lang-key="tabScenarioB">Scenario B</button>
-            <button class="tab-btn" data-tab="results" data-lang-key="tabResults">Results</button>
-        </nav>
+// --- State Variables ---
+let scenarioAData = { user: {}, spouse: {} };
+let scenarioBData = { user: {}, spouse: {} };
+let manualCrashesA = []; 
+let manualCrashesB = [];
+let manualVixA = []; 
+let manualVixB = [];
+let survivalTiersA = [];
+let survivalTiersB = [];
+let isRestoring = false; // Flag to prevent auto-save/sync during load
 
-        <main class="tab-content-container">
-            <div id="scenarioA-pane" class="tab-pane active">
-                <div class="input-section">
-                    <h2 data-lang-key="section1Title">1. Enter Information (Scenario A)</h2>
-                    
-                    <div class="form-grid">
-                        <fieldset>
-                            <legend data-lang-key="legendBasicInfo">Basic Information</legend>
-                             <div class="form-group">
-                                <label for="exchangeRate" data-lang-key="exchangeRateLabel">Exchange Rate (1 CAD = ? MYR)</label>
-                                <span class="tooltip" data-lang-key-tooltip="exchangeRateTooltip">?</span>
-                                <input type="number" id="exchangeRate" value="3.1" step="0.1">
-                            </div>
-                           <div class="form-group">
-                                <label for="retirementAge_a" data-lang-key="retirementAgeLabel">Retirement Age</label>
-                                <input type="number" id="retirementAge_a" value="60">
-                            </div>
-                             <div class="form-group">
-                                <label for="lifeExpectancy" data-lang-key="lifeExpectancyLabel">Maximum Calculation Age</label>
-                                <input type="number" id="lifeExpectancy" value="95">
-                            </div>
-                            <div class="form-group">
-                                <label for="cola" data-lang-key="colaLabel">Global COLA (%)</label>
-                                <input type="number" id="cola" step="0.1" value="2.5">
-                            </div>
-                            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                                <input type="checkbox" id="isCouple_a" style="width: auto;">
-                                <label for="isCouple_a" style="margin:0; cursor: pointer;">Couple / Split Income Mode?</label>
-                            </div>
-                        </fieldset>
+// --- Helper: ID Resolver for Inconsistent Scenario A Naming ---
+function _resolveElementId(baseId, scenarioSuffix) {
+    if (scenarioSuffix === 'b') {
+        return baseId + '_b';
+    } else {
+        const idsWithASuffix = [
+            'isCouple', 'retirementAge', 
+            'survival_enable'
+        ];
+        
+        if (idsWithASuffix.includes(baseId)) {
+            return baseId + '_a';
+        }
+        return baseId;
+    }
+}
 
-                        <fieldset>
-                            <legend data-lang-key="legendYourInfo">Income Plan</legend> 
-                            <div class="form-group">
-                                <label for="userBirthYear" data-lang-key="userBirthYearLabel">Birth Year</label>
-                                <input type="number" id="userBirthYear" value="1980">
-                            </div>
-                        </fieldset>
+// --- Initialization ---
+function initializeScenarioData(scenarioSuffix) {
+    const s = scenarioSuffix;
+    const dataStore = (s === 'a') ? scenarioAData : scenarioBData;
 
-                        <fieldset id="spouse-income-plan-container-a" class="hidden">
-                            <legend>Spouse Income Plan</legend>
-                            <div class="form-group">
-                                <label for="spouseBirthYear">Spouse Birth Year</label>
-                                <input type="number" id="spouseBirthYear" value="1980">
-                            </div>
-                        </fieldset>
-                    </div> 
+    saveCurrentPersonData(s);
+    
+    const coupleCheckboxId = _resolveElementId('isCouple', s);
+    const coupleCheckbox = document.getElementById(coupleCheckboxId);
+    const spouseAssetContainer = document.getElementById(`spouse-assets-container-${s}`);
+    const spouseIncomeContainer = document.getElementById(`spouse-income-plan-container-${s}`); 
 
-                    <div style="margin-top: 2rem;">
-                        <fieldset class="full-width">
-                            <legend data-lang-key="legendAssets">Assets (Investment Portfolio)</legend>
-                            <div class="asset-input-group">
-                                <h4 class="asset-owner-title">My Portfolio (User)</h4>
-                                <div id="dynamic-assets-list-a"></div>
-                                <button type="button" id="add-asset-btn-a" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
-                            </div>
+    if (coupleCheckbox) {
+        const toggleSpouseUI = () => {
+            const isChecked = coupleCheckbox.checked;
+            if (spouseAssetContainer) isChecked ? spouseAssetContainer.classList.remove('hidden') : spouseAssetContainer.classList.add('hidden');
+            if (spouseIncomeContainer) isChecked ? spouseIncomeContainer.classList.remove('hidden') : spouseIncomeContainer.classList.add('hidden');
+        };
 
-                            <div id="spouse-assets-container-a" class="asset-input-group hidden" style="margin-top: 1.5rem; border-top: 1px dashed var(--border-color); padding-top: 1rem;">
-                                <h4 class="asset-owner-title">Spouse Portfolio</h4>
-                                <div id="dynamic-assets-list-spouse-a"></div>
-                                <button type="button" id="add-asset-btn-spouse-a" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
-                            </div>
-                        </fieldset>
-                    </div>
+        coupleCheckbox.addEventListener('change', () => {
+            toggleSpouseUI();
+            if (s === 'a' && !isRestoring) syncInputAtoB(coupleCheckboxId);
+        });
+        toggleSpouseUI();
+    }
 
-                    <div style="margin-top: 2rem;">
-                        <fieldset class="full-width">
-                            <legend>Strategy & Market Scenarios</legend>
-                            
-                            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
-                                <div>
-                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">📉 Market Events (Drop & VIX)</h4>
-                                    <div class="form-group">
-                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Simulate drops or VIX crush at specific ages.</label>
-                                        <div id="crash-list-a" style="margin-bottom: 0.5rem;"></div>
-                                        <div id="vix-list-a" style="margin-bottom: 1rem;"></div>
-                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                            <input type="number" id="crash_age_input_a" placeholder="Age" style="width: 80px;">
-                                            <input type="text" inputmode="text" id="crash_drop_input_a" placeholder="Drop % (e.g. -30)" style="width: 120px;">
-                                            <button type="button" id="add-crash-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ Drop</button>
-                                        </div>
-                                        <div style="display: flex; gap: 0.5rem;">
-                                            <input type="number" id="vix_age_input_a" placeholder="Age" style="width: 80px;">
-                                            <button type="button" id="add-vix-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ VIX Crush (Min Yield)</button>
-                                        </div>
-                                    </div>
-                                </div>
+    if (s === 'a') {
+        const basicInputs = [
+            'exchangeRate', 'lifeExpectancy', 'cola',
+            'retirementAge', 'userBirthYear', 
+            'spouseBirthYear', 
+            'isCouple',
+            'survival_enable'
+        ];
 
-                                <div>
-                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">🚨 Survival Tightening Rule</h4>
-                                    <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-                                        <input type="checkbox" id="survival_enable_a" style="width: auto;">
-                                        <label for="survival_enable_a" style="margin:0; cursor: pointer;">Enable Rule</label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Define multiple tightening tiers.</label>
-                                        <div id="survival-tier-list-a" style="margin-bottom: 0.5rem;"></div>
-                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                            <input type="number" id="tier_trigger_input_a" placeholder="NAV <" style="width: 80px;">
-                                            <input type="number" id="tier_expense_input_a" placeholder="Expense (PV $)" style="width: 120px;">
-                                            <button type="button" id="add-tier-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ Add Tier</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+        basicInputs.forEach(baseId => {
+            const idA = _resolveElementId(baseId, 'a');
+            const elementA = document.getElementById(idA); 
+            if (elementA) {
+                const eventType = (elementA.type === 'checkbox' || elementA.tagName === 'SELECT') ? 'change' : 'input';
+                elementA.addEventListener(eventType, () => {
+                    if (!isRestoring) syncInputAtoB(idA);
+                });
+            }
+        });
+    }
 
-                             <hr style="border-top: 1px dashed var(--border-color); margin: 1.5rem 0;">
-                            <div> <label data-lang-key="legendOtherIncome">Other Income & Expenses</label>
-                                <p data-lang-key="otherIncomeDesc" style="margin-bottom: 0.5rem; font-size: 0.9em;">Manage pensions, rental income, and living expenses.</p>
-                                <button id="manage-income-btn" type="button" data-lang-key="manageIncomeExpensesBtn">[ Manage Income & Expenses ]</button>
-                            </div>
-                        </fieldset>
-                    </div>
-                </div>
-            </div>
+    // Dynamic Asset Add Buttons
+    const uBtn = document.getElementById(`add-asset-btn-${s}`);
+    const sBtn = document.getElementById(`add-asset-btn-spouse-${s}`);
+    if(uBtn) {
+        const newUBtn = uBtn.cloneNode(true);
+        uBtn.parentNode.replaceChild(newUBtn, uBtn);
+        newUBtn.addEventListener('click', () => { addDynamicAssetUI(`dynamic-assets-list-${s}`, null, s); triggerSaveAndSync(s); });
+    }
+    if(sBtn) {
+        const newSBtn = sBtn.cloneNode(true);
+        sBtn.parentNode.replaceChild(newSBtn, sBtn);
+        newSBtn.addEventListener('click', () => { addDynamicAssetUI(`dynamic-assets-list-spouse-${s}`, null, s); triggerSaveAndSync(s); });
+    }
 
-            <div id="scenarioB-pane" class="tab-pane">
-                 <div class="input-section">
-                    <h2 data-lang-key="section1Title">1. Enter Information (Scenario B)</h2>
-                    
-                    <div class="form-grid">
-                         <fieldset>
-                            <legend data-lang-key="legendBasicInfo">Basic Information</legend>
-                            <div class="form-group">
-                                <label for="exchangeRate_b" data-lang-key="exchangeRateLabel">Exchange Rate (1 CAD = ? MYR)</label>
-                                <span class="tooltip" data-lang-key-tooltip="exchangeRateTooltip">?</span>
-                                <input type="number" id="exchangeRate_b" value="3.1" step="0.1">
-                            </div>
-                            <div class="form-group">
-                                <label for="retirementAge_b" data-lang-key="retirementAgeLabel">Retirement Age</label>
-                                <input type="number" id="retirementAge_b" value="65"> </div>
-                            <div class="form-group">
-                                <label for="lifeExpectancy_b" data-lang-key="lifeExpectancyLabel">Maximum Calculation Age</label>
-                                <input type="number" id="lifeExpectancy_b" value="95">
-                            </div>
-                            <div class="form-group">
-                                <label for="cola_b" data-lang-key="colaLabel">Global COLA (%)</label>
-                                <input type="number" id="cola_b" step="0.1" value="2.5">
-                            </div>
-                            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px;">
-                                <input type="checkbox" id="isCouple_b" style="width: auto;">
-                                <label for="isCouple_b" style="margin:0; cursor: pointer;">Couple / Split Income Mode?</label>
-                            </div>
-                        </fieldset>
-                        <fieldset>
-                            <legend data-lang-key="legendYourInfo">Income Plan</legend> 
-                            <div class="form-group">
-                                <label for="userBirthYear_b" data-lang-key="userBirthYearLabel">Birth Year</label>
-                                <input type="number" id="userBirthYear_b" value="1980">
-                            </div>
-                        </fieldset>
-                        
-                        <fieldset id="spouse-income-plan-container-b" class="hidden">
-                            <legend>Spouse Income Plan</legend>
-                            <div class="form-group">
-                                <label for="spouseBirthYear_b">Spouse Birth Year</label>
-                                <input type="number" id="spouseBirthYear_b" value="1980">
-                            </div>
-                        </fieldset>
-                    </div>
+    _setupCrashListLogic(s);
+    _setupVixListLogic(s);
+    _setupSurvivalTierLogic(s);
+}
 
-                    <div style="margin-top: 2rem;">
-                        <fieldset class="full-width">
-                            <legend data-lang-key="legendAssets">Assets (Investment Portfolio)</legend>
-                            <div class="asset-input-group">
-                                <h4 class="asset-owner-title">My Portfolio (User)</h4>
-                                <div id="dynamic-assets-list-b"></div>
-                                <button type="button" id="add-asset-btn-b" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
-                            </div>
+// --- Data Synchronization Functions ---
 
-                            <div id="spouse-assets-container-b" class="asset-input-group hidden" style="margin-top: 1.5rem; border-top: 1px dashed var(--border-color); padding-top: 1rem;">
-                                <h4 class="asset-owner-title">Spouse Portfolio</h4>
-                                <div id="dynamic-assets-list-spouse-b"></div>
-                                <button type="button" id="add-asset-btn-spouse-b" class="btn-secondary" style="margin-top: 10px;">+ Add Asset</button>
-                            </div>
-                        </fieldset>
-                    </div>
+function saveCurrentPersonData(scenarioSuffix) {
+    if (isRestoring) return;
 
-                    <div style="margin-top: 2rem;">
-                        <fieldset class="full-width">
-                            <legend>Strategy & Market Scenarios</legend>
-                            
-                            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 2rem;">
-                                <div>
-                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">📉 Market Events (Drop & VIX)</h4>
-                                    <div class="form-group">
-                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Simulate drops or VIX crush at specific ages.</label>
-                                        <div id="crash-list-b" style="margin-bottom: 0.5rem;"></div>
-                                        <div id="vix-list-b" style="margin-bottom: 1rem;"></div>
-                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                            <input type="number" id="crash_age_input_b" placeholder="Age" style="width: 80px;">
-                                            <input type="text" inputmode="text" id="crash_drop_input_b" placeholder="Drop % (e.g. -30)" style="width: 120px;">
-                                            <button type="button" id="add-crash-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ Drop</button>
-                                        </div>
-                                        <div style="display: flex; gap: 0.5rem;">
-                                            <input type="number" id="vix_age_input_b" placeholder="Age" style="width: 80px;">
-                                            <button type="button" id="add-vix-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ VIX Crush (Min Yield)</button>
-                                        </div>
-                                    </div>
-                                </div>
+    const s = scenarioSuffix;
+    const dataStore = (s === 'a') ? scenarioAData : scenarioBData;
 
-                                <div>
-                                    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--danger-color);">🚨 Survival Tightening Rule</h4>
-                                    <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-                                        <input type="checkbox" id="survival_enable_b" style="width: auto;">
-                                        <label for="survival_enable_b" style="margin:0; cursor: pointer;">Enable Rule</label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Define multiple tightening tiers.</label>
-                                        <div id="survival-tier-list-b" style="margin-bottom: 0.5rem;"></div>
-                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                            <input type="number" id="tier_trigger_input_b" placeholder="NAV <" style="width: 80px;">
-                                            <input type="number" id="tier_expense_input_b" placeholder="Expense (PV $)" style="width: 120px;">
-                                            <button type="button" id="add-tier-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ Add Tier</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+    const getVal = (baseId) => {
+        const el = document.getElementById(_resolveElementId(baseId, s));
+        return el ? (parseFloat(el.value) || 0) : 0;
+    };
 
-                             <hr style="border-top: 1px dashed var(--border-color); margin: 1.5rem 0;">
-                            <div> <label data-lang-key="legendOtherIncome">Other Income & Expenses</label>
-                                <p data-lang-key="otherIncomeDesc" style="margin-bottom: 0.5rem; font-size: 0.9em;">Manage pensions, rental income, and living expenses.</p>
-                                <button id="manage-income-btn_b" type="button" data-lang-key="manageIncomeExpensesBtn">[ Manage Income & Expenses ]</button>
-                            </div>
-                        </fieldset>
-                         </div>
-                </div>
-            </div>
+    dataStore.user = {
+        birthYear: getVal('userBirthYear') || 1980,
+        assets: _gatherAssetDataFromUI(s, 'user')
+    };
 
-            <div id="results-pane" class="tab-pane">
-                 <div class="output-section">
-                    <h2 data-lang-key="section2Title">2. Analysis Results</h2>
+    dataStore.spouse = {
+        birthYear: getVal('spouseBirthYear') || 1980,
+        assets: _gatherAssetDataFromUI(s, 'spouse')
+    };
+}
 
-                    <div class="main-action-controls">
-                        <button id="runAnalysisBtn" type="button" data-lang-key="runAnalysisBtn">Run Analysis</button>
-                        <div class="mc-group">
-                            <button id="runMonteCarloBtn" type="button" data-lang-key="runMonteCarloBtn">Run Monte Carlo</button>
-                            <div>
-                                <label for="monteCarloRunsSelect" data-lang-key="monteCarloRunsLabel" style="margin-bottom: 0.25rem; font-size: 0.9em;">Runs:</label>
-                                <select id="monteCarloRunsSelect">
-                                    <option value="1000">1K</option>
-                                    <option value="5000">5K</option>
-                                    <option value="10000" selected>10K</option>
-                                    <option value="50000">50K</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button id="runOptimizationBtn" type="button" class="hidden" data-lang-key="runOptimizationBtn">Run Optimization (N/A)</button>
-                    </div>
+function loadPersonData(scenarioSuffix) {
+    const s = scenarioSuffix;
+    const dataStore = (s === 'a') ? scenarioAData : scenarioBData;
+    
+    if (!dataStore || !dataStore.user) {
+        console.warn(`loadPersonData: dataStore for ${s} is empty.`);
+        return;
+    }
 
-                    <div id="loading-indicator" class="hidden"> <p data-lang-key="loadingText">Calculating...</p> <div class="spinner"></div> </div>
-                    <div id="optimizer-loading-indicator" class="hidden">
-                         <p id="optimizer-loading-text" data-lang-key="loadingTextOptimizer" style="font-weight: bold; margin-bottom: 0.5rem;">Running Optimization...</p>
-                         <p style="font-size: 0.9em; margin-top: 0;">(This may take up to a minute)</p>
-                         <div class="spinner"></div>
-                    </div>
-                    <div id="results-container" class="hidden">
-                        <div id="break-even-result">
-                            <p id="break-even-text-result"></p>
-                            <div id="additional-metrics-container"></div>
-                            <div id="monte-carlo-results-container"></div>
-                        </div>
-                        
-                        <div id="graph-container" class="hidden">
-                             <h3>Asset Comparison Graph</h3> 
-                             <svg id="results-chart"></svg>
-                        </div>
+    const uData = dataStore.user || {};
+    const sData = dataStore.spouse || {};
 
-                        <div id="mc-graph-container-area" class="hidden">
-                             <div id="mc-graph-a-container" class="mc-graph-container">
-                                 <h3 data-lang-key="mcGraphTitleA">Monte Carlo Graph (Scenario A)</h3> 
-                                 <svg id="mc-chart-a"></svg>
-                             </div>
-                             <div id="mc-graph-b-container" class="mc-graph-container">
-                                 <h3 data-lang-key="mcGraphTitleB">Monte Carlo Graph (Scenario B)</h3> 
-                                 <svg id="mc-chart-b"></svg>
-                             </div>
-                        </div>
+    const setVal = (baseId, val) => {
+        const id = _resolveElementId(baseId, s);
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
 
-                        <div class="detailed-table-section">
-                            <div class="table-controls">
-                                <button id="toggle-graph-btn" type="button" class="hidden" data-lang-key="toggleGraphBtn">Show/Hide Graph</button>
-                                <button id="toggle-details-a-btn" type="button" class="hidden">[A] Details</button>
-                                <button id="toggle-details-b-btn" type="button" class="hidden">[B] Details</button>
-                                <button id="export-csv-btn" type="button" class="hidden" data-lang-key="exportCsvBtn">Export to CSV</button>
-                            </div>
-                            <div id="detailed-table-container-a" class="hidden" style="margin-top: 1rem;"></div>
-                            <div id="detailed-table-container-b" class="hidden" style="margin-top: 1rem;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+    setVal('userBirthYear', uData.birthYear || '');
+    
+    if (uData.assets) {
+        _populateAssetUI(s, 'user', uData.assets);
+    }
 
-        <footer>
-            <div class="footer-credits"> <p>© 2025 dluvbell. All Rights Reserved.</p> <p data-lang-key="createdBy">Created by <a href="https://github.com/dluvbell" target="_blank" rel="noopener noreferrer">dluvbell</a>.</p> </div>
-            <h3 data-lang-key="disclaimerTitle">Disclaimer</h3>
-            <p data-lang-key="disclaimerP1">For information only.</p>
-            <p data-lang-key="disclaimerP2">Results are estimates. Not financial advice.</p>
-            <p data-lang-key="disclaimerP3">Consult a professional specific to international tax.</p>
-        </footer>
-    </div>
+    setVal('spouseBirthYear', sData.birthYear || '');
+    
+    if (sData.assets) {
+        _populateAssetUI(s, 'spouse', sData.assets);
+    }
 
-     <div id="welcome-modal" class="modal">
-         <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h2 data-lang-key="welcomeTitle">Welcome!</h2>
-            <p data-lang-key="welcomeP1">This tool helps you compare two potential retirement scenarios.</p>
-            <h3 data-lang-key="resultsHeader">Key Features & Calculations:</h3>
-            <p data-lang-key="resultsP1">The simulator calculates year-by-year projections based on your inputs for two different scenarios (A and B).</p>
-            <p data-lang-key="resultsP2">Results include asset growth, income sources, expenses, withdrawals according to your strategy, and estimated taxes.</p>
-            <h3 data-lang-key="disclaimerTitle">Disclaimer</h3>
-            <p data-lang-key="disclaimerP2">Results are estimates based on provided inputs and assumptions. This is not financial advice.</p>
-             <p data-lang-key="disclaimerP3">Consult with a qualified financial professional before making any decisions.</p>
-            <div class="agreement-section">
-                <input type="checkbox" id="disclaimer-agree">
-                <label for="disclaimer-agree" data-lang-key="agreeLabel">I understand and agree.</label>
-            </div>
-            <button id="agree-btn" type="button" data-lang-key="confirmBtn" disabled>Confirm</button>
-         </div>
-     </div>
+    const coupleCheckbox = document.getElementById(_resolveElementId('isCouple', s));
+    if (coupleCheckbox) coupleCheckbox.dispatchEvent(new Event('change'));
 
-     <div id="income-modal" class="modal hidden">
-         <div class="modal-content">
-             <span class="close-button">&times;</span>
-             <h2 data-lang-key="modalTitle">Manage Income & Expenses (A)</h2>
-             <div id="income-list"></div>
-             <hr>
-             <h3 data-lang-key="modalAddTitle">Add/Edit Item</h3>
-             <div id="add-income-form" class="form-grid-modal">
-                 <input type="hidden" id="income-id">
-                 <div class="form-group">
-                    <label for="income-owner">Owner</label>
-                    <select id="income-owner">
-                        <option value="user">User (Me)</option>
-                        <option value="spouse">Spouse</option>
-                        <option value="joint">Joint (50/50)</option>
-                    </select>
-                 </div>
-                 <div class="form-group">
-                    <label for="income-type" data-lang-key="incomeTypeLabel">Type</label>
-                    <select id="income-type">
-                        <option value="pension" data-lang-key="incomeTypePension">Income: Pension (Tax Exempt in Malaysia)</option>
-                        <option value="income" data-lang-key="incomeTypeOther">Income: Other (Taxable in Malaysia)</option>
-                        <option value="income_overseas" data-lang-key="incomeTypeOverseas">Income: Other (Overseas/Not Remitted)</option>
-                        <option value="expense_malaysia" data-lang-key="expenseTypeMalaysia">Expense: Malaysia Living</option>
-                        <option value="expense_special" data-lang-key="expenseTypeSpecial">Expense: Special (Exempt from Survival Rule)</option>
-                        <option value="expense_overseas" data-lang-key="expenseTypeOverseas">Expense: Overseas Travel (Not Remitted)</option>
-                    </select>
-                </div>
-                 <div class="form-group"><label for="income-desc" data-lang-key="incomeDescLabel">Description</label><input type="text" id="income-desc"></div>
-                 <div class="form-group"><label for="income-amount" data-lang-key="incomeAmountLabel">Amount (PV)</label><input type="number" id="income-amount"><div class="future-value-display" id="future-value-display"></div></div>
-                 <div class="form-group"><label for="income-start-age" data-lang-key="incomeStartAgeLabel">Start Age</label><input type="number" id="income-start-age"></div>
-                 <div class="form-group"><label for="income-end-age" data-lang-key="incomeEndAgeLabel">End Age</label><input type="number" id="income-end-age"></div>
-                 <div class="form-group">
-                    <label for="income-cola" data-lang-key="incomeColaLabel">COLA (%)</label>
-                    <span class="tooltip" data-lang-key-tooltip="incomeColaTooltip">?</span>
-                    <input type="number" id="income-cola" placeholder="0" step="0.1">
-                </div>
-                </div>
-             <button id="save-income-btn" type="button" data-lang-key="saveIncomeBtn">Save</button>
-         </div>
-     </div>
-     <div id="income-modal_b" class="modal hidden">
-         <div class="modal-content">
-             <span class="close-button">&times;</span>
-             <h2 data-lang-key="modalTitle">Manage Income & Expenses (B)</h2>
-             <div id="income-list_b"></div>
-             <hr>
-             <h3 data-lang-key="modalAddTitle">Add/Edit Item</h3>
-             <div id="add-income-form_b" class="form-grid-modal">
-                 <input type="hidden" id="income-id_b">
-                 <div class="form-group">
-                    <label for="income-owner_b">Owner</label>
-                    <select id="income-owner_b">
-                        <option value="user">User (Me)</option>
-                        <option value="spouse">Spouse</option>
-                        <option value="joint">Joint (50/50)</option>
-                    </select>
-                 </div>
-                 <div class="form-group">
-                    <label for="income-type_b" data-lang-key="incomeTypeLabel">Type</label>
-                     <select id="income-type_b">
-                        <option value="pension" data-lang-key="incomeTypePension">Income: Pension (Tax Exempt in Malaysia)</option>
-                        <option value="income" data-lang-key="incomeTypeOther">Income: Other (Taxable in Malaysia)</option>
-                        <option value="income_overseas" data-lang-key="incomeTypeOverseas">Income: Other (Overseas/Not Remitted)</option>
-                        <option value="expense_malaysia" data-lang-key="expenseTypeMalaysia">Expense: Malaysia Living</option>
-                        <option value="expense_special" data-lang-key="expenseTypeSpecial">Expense: Special (Exempt from Survival Rule)</option>
-                        <option value="expense_overseas" data-lang-key="expenseTypeOverseas">Expense: Overseas Travel (Not Remitted)</option>
-                    </select>
-                </div>
-                 <div class="form-group"><label for="income-desc_b" data-lang-key="incomeDescLabel">Description</label><input type="text" id="income-desc_b"></div>
-                 <div class="form-group"><label for="income-amount_b" data-lang-key="incomeAmountLabel">Amount (PV)</label><input type="number" id="income-amount_b"><div class="future-value-display" id="future-value-display_b"></div></div>
-                 <div class="form-group"><label for="income-start-age_b" data-lang-key="incomeStartAgeLabel">Start Age</label><input type="number" id="income-start-age_b"></div>
-                 <div class="form-group"><label for="income-end-age_b" data-lang-key="incomeEndAgeLabel">End Age</label><input type="number" id="income-end-age_b"></div>
-                 <div class="form-group">
-                    <label for="income-cola_b" data-lang-key="incomeColaLabel">COLA (%)</label>
-                    <span class="tooltip" data-lang-key-tooltip="incomeColaTooltip">?</span>
-                    <input type="number" id="income-cola_b" placeholder="0" step="0.1">
-                </div>
-                </div>
-             <button id="save-income-btn_b" type="button" data-lang-key="saveIncomeBtn">Save</button>
-         </div>
-     </div>
+    if (typeof renderIncomeList === 'function') renderIncomeList(s);
+    _renderCrashList(s); 
+    _renderVixList(s);
+    _renderSurvivalTiers(s);
+}
 
-    <template id="dynamic-asset-template">
-        <div class="asset-row dynamic-asset" style="border: 1px solid var(--border-color); padding: 15px; margin-bottom: 10px; border-radius: 8px; position: relative;">
-            <button type="button" class="btn-remove-asset" style="position: absolute; top: 10px; right: 10px; background: var(--danger-color); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Remove</button>
-            <div class="form-group" style="margin-bottom: 10px;">
-                <label>Asset Name</label>
-                <input type="text" class="asset-name" value="Asset" style="width: 200px; font-weight: bold;">
-            </div>
-            <div class="asset-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px;">
-                <div>
-                    <label>Type</label>
-                    <select class="asset-type">
-                        <option value="equity">Equity (주식)</option>
-                        <option value="covered_call">Covered Call</option>
-                    </select>
-                </div>
-                <div><label>Balance ($)</label><input type="number" class="asset-bal" value="0"></div>
-                <div><label>Growth (%)</label><input type="number" class="asset-growth" value="5.0" step="0.1"></div>
-                <div><label>Vol (Std %)</label><input type="number" class="asset-stdev" value="12.0" step="0.1"></div>
-                <div><label>Div Yield (%)</label><input type="number" class="asset-div" value="4.0" step="0.1"></div>
-                <div><label>Div Growth (%)</label><input type="number" class="asset-div-growth" value="5.0" step="0.1"></div>
-                <div><label>Min Yield (%)</label><input type="number" class="asset-min-yield" value="7.0" step="0.1" title="For Covered Call"></div>
-                <div><label>Max Yield (%)</label><input type="number" class="asset-max-yield" value="15.0" step="0.1" title="For Covered Call"></div>
-                <div><label>WHT (%)</label><input type="number" class="asset-wht" value="15.0" step="0.1"></div>
-            </div>
-        </div>
-    </template>
+// --- Dynamic Asset Logic ---
 
-    <script src="https://d3js.org/d3.v7.min.js"></script> 
-    <script src="data.js"></script>
-    <script src="incomeTaxEngine.js"></script>
-    <script src="withdrawalEngine.js"></script>
-    <script src="engineCore.js"></script>
-    <script src="monteCarloEngine.js"></script>
-    <script src="uiCore.js"></script> 
-    <script src="uiDataHandler.js"></script>
-    <script src="uiIncomeModal.js"></script>
-    <script src="uiResultsDisplay.js"></script> 
-    <script src="uiOptimizationDisplay.js"></script> 
-    <script src="uiMonteCarloDisplay.js"></script> 
-</body>
-</html>
+function addDynamicAssetUI(containerId, data = null, scenarioSuffix = 'a') {
+    const container = document.getElementById(containerId);
+    const template = document.getElementById('dynamic-asset-template');
+    if (!container || !template) return;
+
+    const clone = template.content.cloneNode(true);
+    const row = clone.querySelector('.dynamic-asset');
+
+    if (data) {
+        row.querySelector('.asset-name').value = data.name || 'Asset';
+        row.querySelector('.asset-type').value = data.type || 'equity';
+        row.querySelector('.asset-bal').value = data.balance || 0;
+        row.querySelector('.asset-growth').value = (data.growth || 0) * 100;
+        row.querySelector('.asset-stdev').value = (data.stdev || 0) * 100;
+        row.querySelector('.asset-div').value = (data.initialDiv || 0) * 100;
+        row.querySelector('.asset-div-growth').value = (data.divGrowth || 0) * 100;
+        row.querySelector('.asset-min-yield').value = (data.minYield || 0) * 100;
+        row.querySelector('.asset-max-yield').value = (data.maxYield || 0) * 100;
+        row.querySelector('.asset-wht').value = (data.wht || 0) * 100;
+    }
+
+    row.querySelector('.btn-remove-asset').addEventListener('click', function() {
+        row.remove();
+        triggerSaveAndSync(scenarioSuffix);
+    });
+
+    const inputs = row.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        input.addEventListener('input', () => triggerSaveAndSync(scenarioSuffix));
+        input.addEventListener('change', () => triggerSaveAndSync(scenarioSuffix));
+    });
+
+    container.appendChild(clone);
+}
+
+function triggerSaveAndSync(s) {
+    if (isRestoring) return;
+    if (window.saveToLocalStorage) window.saveToLocalStorage();
+    
+    // Sync A arrays to B arrays if triggered from A
+    if (s === 'a') {
+        const dataA_user = _gatherAssetDataFromUI('a', 'user');
+        const dataA_spouse = _gatherAssetDataFromUI('a', 'spouse');
+        const prev = isRestoring;
+        isRestoring = true; // Prevent recursive loop
+        _populateAssetUI('b', 'user', dataA_user);
+        _populateAssetUI('b', 'spouse', dataA_spouse);
+        isRestoring = prev;
+    }
+}
+
+function _gatherAssetDataFromUI(scenarioSuffix, owner) {
+    const suffix = (scenarioSuffix === 'a') ? '-a' : '-b';
+    const ownerInfix = (owner === 'spouse') ? '-spouse' : '';
+    const containerId = `dynamic-assets-list${ownerInfix}${suffix}`;
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+
+    const result = [];
+    const rows = container.querySelectorAll('.dynamic-asset');
+    rows.forEach(row => {
+        result.push({
+            name: row.querySelector('.asset-name').value || 'Asset',
+            type: row.querySelector('.asset-type').value || 'equity',
+            balance: parseFloat(row.querySelector('.asset-bal').value) || 0,
+            growth: (parseFloat(row.querySelector('.asset-growth').value) || 0) / 100,
+            stdev: (parseFloat(row.querySelector('.asset-stdev').value) || 0) / 100,
+            initialDiv: (parseFloat(row.querySelector('.asset-div').value) || 0) / 100,
+            divGrowth: (parseFloat(row.querySelector('.asset-div-growth').value) || 0) / 100,
+            minYield: (parseFloat(row.querySelector('.asset-min-yield').value) || 0) / 100,
+            maxYield: (parseFloat(row.querySelector('.asset-max-yield').value) || 0) / 100,
+            wht: (parseFloat(row.querySelector('.asset-wht').value) || 0) / 100
+        });
+    });
+    return result;
+}
+
+function _populateAssetUI(scenarioSuffix, owner, assetsArray) {
+    const suffix = (scenarioSuffix === 'a') ? '-a' : '-b';
+    const ownerInfix = (owner === 'spouse') ? '-spouse' : '';
+    const containerId = `dynamic-assets-list${ownerInfix}${suffix}`;
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = ''; 
+    if (!Array.isArray(assetsArray)) return;
+
+    assetsArray.forEach(d => {
+        addDynamicAssetUI(containerId, d, scenarioSuffix);
+    });
+}
+
+// --- Strategy & Event Handlers ---
+
+function _gatherStrategyInputs(s) {
+    const getCheck = (baseId) => document.getElementById(_resolveElementId(baseId, s))?.checked || false;
+
+    return {
+        survival_enable: getCheck('survival_enable')
+    };
+}
+
+function _setupCrashListLogic(s) {
+    const btnId = `add-crash-btn-${s}`;
+    const ageInputId = `crash_age_input_${s}`;
+    const dropInputId = `crash_drop_input_${s}`;
+    
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', () => {
+        const age = parseInt(document.getElementById(ageInputId).value);
+        const drop = parseFloat(document.getElementById(dropInputId).value);
+        
+        if (age > 0 && !isNaN(drop)) {
+            const list = (s === 'a') ? manualCrashesA : manualCrashesB;
+            const newItem = { age, drop };
+            list.push(newItem);
+            list.sort((a,b) => a.age - b.age);
+            _renderCrashList(s);
+            
+            if (s === 'a' && !isRestoring) { 
+                manualCrashesB.push({ ...newItem });
+                manualCrashesB.sort((a,b) => a.age - b.age);
+                _renderCrashList('b');
+            }
+            if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+
+            document.getElementById(ageInputId).value = '';
+            document.getElementById(dropInputId).value = '';
+        }
+    });
+    
+    _renderCrashList(s);
+}
+
+function _setupVixListLogic(s) {
+    const btnId = `add-vix-btn-${s}`;
+    const ageInputId = `vix_age_input_${s}`;
+    
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', () => {
+        const age = parseInt(document.getElementById(ageInputId).value);
+        
+        if (age > 0) {
+            const list = (s === 'a') ? manualVixA : manualVixB;
+            const newItem = { age };
+            if (!list.some(v => v.age === age)) {
+                list.push(newItem);
+                list.sort((a,b) => a.age - b.age);
+            }
+            _renderVixList(s);
+            
+            if (s === 'a' && !isRestoring) { 
+                if (!manualVixB.some(v => v.age === age)) {
+                    manualVixB.push({ ...newItem });
+                    manualVixB.sort((a,b) => a.age - b.age);
+                }
+                _renderVixList('b');
+            }
+            if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+
+            document.getElementById(ageInputId).value = '';
+        }
+    });
+    
+    _renderVixList(s);
+}
+
+function _setupSurvivalTierLogic(s) {
+    const btnId = `add-tier-btn-${s}`;
+    const triggerInputId = `tier_trigger_input_${s}`;
+    const expInputId = `tier_expense_input_${s}`;
+    
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    newBtn.addEventListener('click', () => {
+        const trigger = parseFloat(document.getElementById(triggerInputId).value);
+        const expense = parseFloat(document.getElementById(expInputId).value);
+        
+        if (!isNaN(trigger) && !isNaN(expense)) {
+            const list = (s === 'a') ? survivalTiersA : survivalTiersB;
+            const newItem = { trigger, expense };
+            list.push(newItem);
+            list.sort((a,b) => a.trigger - b.trigger);
+            _renderSurvivalTiers(s);
+            
+            if (s === 'a' && !isRestoring) { 
+                survivalTiersB.push({ ...newItem });
+                survivalTiersB.sort((a,b) => a.trigger - b.trigger);
+                _renderSurvivalTiers('b');
+            }
+            if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+
+            document.getElementById(triggerInputId).value = '';
+            document.getElementById(expInputId).value = '';
+        }
+    });
+    
+    _renderSurvivalTiers(s);
+}
+
+function _renderCrashList(s) {
+    const listId = `crash-list-${s}`;
+    const container = document.getElementById(listId);
+    if (!container) return;
+    
+    const data = (s === 'a') ? manualCrashesA : manualCrashesB;
+    container.innerHTML = '';
+    
+    data.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '4px';
+        div.style.fontSize = '0.9em';
+        
+        const isRebound = item.drop < 0;
+        const label = isRebound ? "📈 Rebound" : "📉 Crash";
+        const valDisplay = isRebound ? `+${Math.abs(item.drop)}` : `-${item.drop}`;
+        const colorStyle = isRebound ? "color: var(--success-color);" : "color: var(--danger-color);";
+
+        div.innerHTML = `
+            <span style="${colorStyle}">Age <strong>${item.age}</strong>: ${label} <strong>${valDisplay}%</strong></span>
+            <button type="button" onclick="_removeCrash('${s}', ${index})" style="margin-left:8px; padding:0 4px; font-size:0.8em; background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;">x</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function _renderVixList(s) {
+    const listId = `vix-list-${s}`;
+    const container = document.getElementById(listId);
+    if (!container) return;
+    
+    const data = (s === 'a') ? manualVixA : manualVixB;
+    container.innerHTML = '';
+    
+    data.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '4px';
+        div.style.fontSize = '0.9em';
+        
+        div.innerHTML = `
+            <span style="color: var(--secondary-color);">Age <strong>${item.age}</strong>: ⏸️ VIX Crush (Min Yield)</span>
+            <button type="button" onclick="_removeVix('${s}', ${index})" style="margin-left:8px; padding:0 4px; font-size:0.8em; background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;">x</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+function _renderSurvivalTiers(s) {
+    const listId = `survival-tier-list-${s}`;
+    const container = document.getElementById(listId);
+    if (!container) return;
+    
+    const data = (s === 'a') ? survivalTiersA : survivalTiersB;
+    container.innerHTML = '';
+    
+    data.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '4px';
+        div.style.fontSize = '0.9em';
+        
+        div.innerHTML = `
+            <span style="color: var(--danger-color);">Drop >= <strong>${item.trigger}%</strong> ➡️ Expense: <strong>$${item.expense.toLocaleString()}</strong></span>
+            <button type="button" onclick="_removeSurvivalTier('${s}', ${index})" style="margin-left:8px; padding:0 4px; font-size:0.8em; background:#dc3545; color:white; border:none; border-radius:3px; cursor:pointer;">x</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+window._removeCrash = function(s, index) {
+    const list = (s === 'a') ? manualCrashesA : manualCrashesB;
+    const removedItem = list[index];
+    list.splice(index, 1);
+    _renderCrashList(s);
+    
+    if (s === 'a' && removedItem && !isRestoring) {
+        const idxB = manualCrashesB.findIndex(c => c.age === removedItem.age && c.drop === removedItem.drop);
+        if (idxB > -1) {
+            manualCrashesB.splice(idxB, 1);
+            _renderCrashList('b');
+        }
+    }
+    if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+}
+
+window._removeVix = function(s, index) {
+    const list = (s === 'a') ? manualVixA : manualVixB;
+    const removedItem = list[index];
+    list.splice(index, 1);
+    _renderVixList(s);
+    
+    if (s === 'a' && removedItem && !isRestoring) {
+        const idxB = manualVixB.findIndex(v => v.age === removedItem.age);
+        if (idxB > -1) {
+            manualVixB.splice(idxB, 1);
+            _renderVixList('b');
+        }
+    }
+    if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+}
+
+window._removeSurvivalTier = function(s, index) {
+    const list = (s === 'a') ? survivalTiersA : survivalTiersB;
+    const removedItem = list[index];
+    list.splice(index, 1);
+    _renderSurvivalTiers(s);
+    
+    if (s === 'a' && removedItem && !isRestoring) {
+        const idxB = survivalTiersB.findIndex(t => t.trigger === removedItem.trigger && t.expense === removedItem.expense);
+        if (idxB > -1) {
+            survivalTiersB.splice(idxB, 1);
+            _renderSurvivalTiers('b');
+        }
+    }
+    if (!isRestoring && window.saveToLocalStorage) window.saveToLocalStorage();
+}
+
+// --- Data Gathering (Main Export) ---
+function gatherInputs(scenarioSuffix) {
+    const s = scenarioSuffix;
+    const dataStore = (s === 'a') ? scenarioAData : scenarioBData;
+    let incomesAndExpenses = [];
+    if (s === 'a') {
+        incomesAndExpenses = typeof otherIncomes_a !== 'undefined' ? otherIncomes_a : window.otherIncomes_a || [];
+    } else {
+        incomesAndExpenses = typeof otherIncomes_b !== 'undefined' ? otherIncomes_b : window.otherIncomes_b || [];
+    }
+    let crashes = (s === 'a') ? manualCrashesA : manualCrashesB;
+    let vixes = (s === 'a') ? manualVixA : manualVixB;
+    let tiers = (s === 'a') ? survivalTiersA : survivalTiersB;
+
+    saveCurrentPersonData(s); 
+
+    const getEl = (baseId) => document.getElementById(_resolveElementId(baseId, s));
+    const getVal = (baseId) => { const el = getEl(baseId); return el ? parseFloat(el.value) : 0; };
+    const getInt = (baseId) => { const el = getEl(baseId); return el ? parseInt(el.value) : 0; };
+    const getCheck = (baseId) => { const el = getEl(baseId); return el ? el.checked : false; };
+
+    const colaInput = getVal('cola');
+    const safeCola = isNaN(colaInput) ? 0.025 : (colaInput / 100);
+
+    const commonInputs = {
+        exchangeRate: getVal('exchangeRate') || 25.0,
+        lifeExpectancy: getInt('lifeExpectancy') || 95,
+        cola: safeCola,
+        retirementAge: getInt('retirementAge') || 60,
+        isCouple: getCheck('isCouple')
+    };
+
+    const userData = dataStore.user || {};
+    const spouseData = dataStore.spouse || {};
+
+    const userScenarioData = {
+        birthYear: userData.birthYear, 
+        assets: userData.assets,
+        otherIncomes: incomesAndExpenses, 
+    };
+
+    const spouseScenarioData = {
+        hasSpouse: commonInputs.isCouple,
+        birthYear: spouseData.birthYear, 
+        assets: spouseData.assets 
+    };
+
+    return {
+        exchangeRate: commonInputs.exchangeRate,
+        lifeExpectancy: commonInputs.lifeExpectancy,
+        cola: commonInputs.cola,
+        isCouple: commonInputs.isCouple,
+        scenario: {
+            retirementAge: commonInputs.retirementAge,
+            survivalConfig: _gatherStrategyInputs(s),
+            survivalTiers: tiers,
+            manualCrashes: crashes,
+            vixCrashes: vixes,
+            user: userScenarioData,
+            spouse: spouseScenarioData
+        }
+    };
+}
+
+// --- Sync Helpers ---
+function syncInputAtoB(elementIdA) {
+    if (isRestoring) return; 
+
+    const elementA = document.getElementById(elementIdA); 
+    if (!elementA) return;
+
+    const isCheckbox = elementA.type === 'checkbox';
+    const newValue = isCheckbox ? elementA.checked : elementA.value;
+    
+    let baseId = elementIdA;
+    if (baseId.endsWith('_a')) {
+        baseId = baseId.slice(0, -2);
+    }
+    
+    let elementIdB = baseId + '_b';
+    const elementB = document.getElementById(elementIdB);
+    
+    if (elementB) {
+        if (isCheckbox) {
+            if (elementB.checked !== newValue) {
+                elementB.checked = newValue;
+                elementB.dispatchEvent(new Event('change')); 
+            }
+        } else {
+            if (elementB.value !== newValue) {
+                elementB.value = newValue;
+                if (elementB.tagName === 'SELECT') elementB.dispatchEvent(new Event('change'));
+            }
+        }
+    }
+    
+    if (window.saveToLocalStorage) window.saveToLocalStorage();
+}
+
+// --- JSON I/O ---
+function handleSaveScenarioClick() {
+    saveCurrentPersonData('a'); saveCurrentPersonData('b');
+    const dataToSave = _gatherSaveObj();
+    const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); 
+    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v16_3.json'; 
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function handleLoadScenarioClick() {
+    if (elements.scenario_file_input) elements.scenario_file_input.click();
+}
+
+function handleFileSelected(event) {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => { 
+        try { 
+            const data = JSON.parse(e.target.result);
+            isRestoring = true;
+            
+            populateUIFromLoadedData(data); 
+            
+            setTimeout(() => {
+                isRestoring = false;
+                if(window.saveToLocalStorage) window.saveToLocalStorage();
+                console.log("Restoration Complete. Data Saved.");
+            }, 300);
+
+        } catch (err) { 
+            console.error(err);
+            isRestoring = false;
+            alert("Invalid file format."); 
+        } 
+        const fileInput = document.getElementById('scenario-file-input');
+        if (fileInput) fileInput.value = null;
+    };
+    reader.onerror = () => { 
+        const fileInput = document.getElementById('scenario-file-input');
+        if (fileInput) fileInput.value = null; 
+    };
+    reader.readAsText(file);
+}
+
+function _gatherSaveObj() {
+    const getVal = (id) => document.getElementById(id)?.value;
+    const getCheck = (id) => document.getElementById(id)?.checked;
+
+    return {
+        exchangeRate: getVal('exchangeRate'),
+        lifeExpectancy: parseInt(getVal('lifeExpectancy')), 
+        cola: parseFloat(getVal('cola')),
+        isCouple_a: getCheck('isCouple_a'), 
+        isCouple_b: getCheck('isCouple_b'),
+        
+        strategy_a: _gatherStrategyInputs('a'),
+        strategy_b: _gatherStrategyInputs('b'),
+        crashes_a: manualCrashesA,
+        crashes_b: manualCrashesB,
+        vix_a: manualVixA,
+        vix_b: manualVixB,
+        tiers_a: survivalTiersA,
+        tiers_b: survivalTiersB,
+
+        scenarioAData: scenarioAData, 
+        otherIncomes_a: typeof otherIncomes_a !== 'undefined' ? otherIncomes_a : window.otherIncomes_a || [],
+        retirementAge_a: getVal('retirementAge_a'),
+        scenarioBData: scenarioBData, 
+        otherIncomes_b: typeof otherIncomes_b !== 'undefined' ? otherIncomes_b : window.otherIncomes_b || [],
+        retirementAge_b: getVal('retirementAge_b')
+    };
+}
+
+function populateUIFromLoadedData(data) {
+    if (!data || !data.scenarioAData) { alert("Invalid data."); return; }
+    
+    scenarioAData = JSON.parse(JSON.stringify(data.scenarioAData)); 
+    scenarioBData = JSON.parse(JSON.stringify(data.scenarioBData));
+    
+    if (typeof otherIncomes_a !== 'undefined') {
+        otherIncomes_a.length = 0; if (data.otherIncomes_a) otherIncomes_a.push(...data.otherIncomes_a);
+    } else {
+        window.otherIncomes_a = data.otherIncomes_a || [];
+    }
+
+    if (typeof otherIncomes_b !== 'undefined') {
+        otherIncomes_b.length = 0; if (data.otherIncomes_b) otherIncomes_b.push(...data.otherIncomes_b);
+    } else {
+        window.otherIncomes_b = data.otherIncomes_b || [];
+    }
+
+    manualCrashesA.length = 0; if(data.crashes_a) manualCrashesA.push(...data.crashes_a);
+    manualCrashesB.length = 0; if(data.crashes_b) manualCrashesB.push(...data.crashes_b);
+    manualVixA.length = 0; if(data.vix_a) manualVixA.push(...data.vix_a);
+    manualVixB.length = 0; if(data.vix_b) manualVixB.push(...data.vix_b);
+    
+    // Backward Compatibility for Survival Tiers (Convert old NAV to Drop %)
+    survivalTiersA.length = 0; 
+    if(data.tiers_a) { survivalTiersA.push(...data.tiers_a); } 
+    else if(data.strategy_a && data.strategy_a.survival_trigger) { 
+        const dropA = 100 - data.strategy_a.survival_trigger;
+        survivalTiersA.push({ trigger: dropA > 0 ? dropA : 20, expense: data.strategy_a.survival_expense || 41000 }); 
+    }
+    
+    survivalTiersB.length = 0; 
+    if(data.tiers_b) { survivalTiersB.push(...data.tiers_b); } 
+    else if(data.strategy_b && data.strategy_b.survival_trigger) { 
+        const dropB = 100 - data.strategy_b.survival_trigger;
+        survivalTiersB.push({ trigger: dropB > 0 ? dropB : 20, expense: data.strategy_b.survival_expense || 41000 }); 
+    }
+
+    const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+    const setCheck = (id, val) => { const el = document.getElementById(id); if(el) el.checked = !!val; };
+
+    setVal('exchangeRate', data.exchangeRate || 25.0);
+    setVal('exchangeRate_b', data.exchangeRate || 25.0); 
+    setVal('lifeExpectancy', data.lifeExpectancy || 95);
+    setVal('cola', data.cola || 2.5);
+    
+    setCheck('isCouple_a', data.isCouple_a);
+    setCheck('isCouple_b', data.isCouple_b);
+
+    setVal('retirementAge_a', data.retirementAge_a || 60);
+    setVal('retirementAge_b', data.retirementAge_b || 65);
+
+    const loadStrat = (s, d) => {
+        const suffix = (s === 'a') ? '_a' : '_b';
+        if (d) {
+            setCheck(`survival_enable${suffix}`, d.survival_enable);
+        }
+    };
+    loadStrat('a', data.strategy_a);
+    loadStrat('b', data.strategy_b);
+
+    loadPersonData('a'); 
+    loadPersonData('b');
+    
+    _renderCrashList('a');
+    _renderCrashList('b');
+    _renderVixList('a');
+    _renderVixList('b');
+    _renderSurvivalTiers('a');
+    _renderSurvivalTiers('b');
+}
+
+// [NEW] LocalStorage Implementation
+window.saveToLocalStorage = function() {
+    if (isRestoring) return; 
+
+    saveCurrentPersonData('a'); saveCurrentPersonData('b');
+    const data = _gatherSaveObj();
+    try {
+        localStorage.setItem('can_my_simulator_data', JSON.stringify(data));
+    } catch(e) {
+        console.warn("LocalStorage save failed (quota exceeded?)", e);
+    }
+};
+
+window.loadFromLocalStorage = function() {
+    try {
+        const json = localStorage.getItem('can_my_simulator_data');
+        if (json) {
+            const data = JSON.parse(json);
+            isRestoring = true;
+            populateUIFromLoadedData(data);
+            setTimeout(() => { isRestoring = false; }, 100);
+            console.log("Loaded from LocalStorage");
+        }
+    } catch(e) {
+        console.warn("LocalStorage load failed", e);
+    }
+};
+
+function setupSyncAtoB() {
+    const containerA = document.getElementById('scenarioA-pane');
+    if (!containerA) return;
+
+    const inputsA = containerA.querySelectorAll('input, select');
+    inputsA.forEach(input => {
+        const handler = () => {
+            const srcId = input.id;
+            if (!srcId) return;
+            if (!isRestoring) syncInputAtoB(srcId);
+        };
+        input.addEventListener('input', handler);
+        input.addEventListener('change', handler);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        setupSyncAtoB();
+    }, 500); 
+});
+
+document.addEventListener('change', (e) => {
+    if (e.target.matches('input, select')) {
+        if(typeof window.saveToLocalStorage === 'function') {
+            window.saveToLocalStorage();
+        }
+    }
+});
