@@ -129,12 +129,13 @@
                                         <label for="survival_enable_a" style="margin:0; cursor: pointer;">Enable Rule</label>
                                     </div>
                                     <div class="form-group">
-                                        <label>Trigger (NAV drops below $)</label>
-                                        <input type="number" id="survival_trigger_a" value="80">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Tightened Expense (PV $)</label>
-                                        <input type="number" id="survival_expense_a" value="41000">
+                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Define multiple tightening tiers.</label>
+                                        <div id="survival-tier-list-a" style="margin-bottom: 0.5rem;"></div>
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <input type="number" id="tier_trigger_input_a" placeholder="NAV <" style="width: 80px;">
+                                            <input type="number" id="tier_expense_input_a" placeholder="Expense (PV $)" style="width: 120px;">
+                                            <button type="button" id="add-tier-btn-a" class="btn-secondary" style="padding: 0.5rem;">+ Add Tier</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -241,12 +242,13 @@
                                         <label for="survival_enable_b" style="margin:0; cursor: pointer;">Enable Rule</label>
                                     </div>
                                     <div class="form-group">
-                                        <label>Trigger (NAV drops below $)</label>
-                                        <input type="number" id="survival_trigger_b" value="80">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Tightened Expense (PV $)</label>
-                                        <input type="number" id="survival_expense_b" value="41000">
+                                        <label style="font-size: 0.9em; margin-bottom: 0.5rem;">Define multiple tightening tiers.</label>
+                                        <div id="survival-tier-list-b" style="margin-bottom: 0.5rem;"></div>
+                                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                            <input type="number" id="tier_trigger_input_b" placeholder="NAV <" style="width: 80px;">
+                                            <input type="number" id="tier_expense_input_b" placeholder="Expense (PV $)" style="width: 120px;">
+                                            <button type="button" id="add-tier-btn-b" class="btn-secondary" style="padding: 0.5rem;">+ Add Tier</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
