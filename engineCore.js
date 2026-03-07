@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.5.1 (Fix: Expense categorization based on UI Special selection)
+ * @version     18.6.0 (Fix: Unlimited Multi-Tier Survival Logic)
  * @file        engineCore.js
  * @description Core simulation loop. Integrated Two-Track engine and NAV-based survival trigger.
  */
@@ -15,6 +15,7 @@ function runFullSimulation(inputsA, inputsB) {
     
     const getStrategySettings = (inputs) => ({
         survivalConfig: inputs.scenario.survivalConfig || {},
+        survivalTiers: inputs.scenario.survivalTiers || [],
         manualCrashes: inputs.scenario.manualCrashes || [],
         vixCrashes: inputs.scenario.vixCrashes || []
     });
@@ -347,27 +348,38 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
     
     yearData.expenses = baseLivingExpenses + specialExpenses + overseasExpenses;
 
-    // --- 🚨 SURVIVAL TIGHTENING RULE (JEPQ NAV) ---
+    // --- 🚨 SURVIVAL TIGHTENING RULE (Unlimited Tiers by NAV) ---
     const cw = settings.survivalConfig || {};
-    if (cw.survival_enable) {
-        const trigger = Number(cw.survival_trigger) || 80;
-        const tightenedPv = Number(cw.survival_expense) || 41000;
-        
-        let navDropped = false;
+    const tiers = settings.survivalTiers || [];
+    
+    if (cw.survival_enable && tiers.length > 0) {
+        let lowestNav = Infinity;
         const allAssets = (currentUserAssets || []).concat(currentSpouseAssets || []);
         
         for (const a of allAssets) {
-            if (a.type === 'covered_call' && a.currentNav < trigger) {
-                navDropped = true;
-                break;
+            if (a.type === 'covered_call' && a.currentNav < lowestNav) {
+                lowestNav = a.currentNav;
             }
         }
         
-        if (navDropped) {
-            const yearsSinceBase = Math.max(0, currentYear - baseYear);
-            const inflatedTightened = tightenedPv * Math.pow(1 + (settings.cola || 0.025), yearsSinceBase);
-            yearData.expenses = inflatedTightened + specialExpenses + overseasExpenses;
-            yearData.isSurvivalTightened = true; 
+        if (lowestNav !== Infinity) {
+            const sortedTiers = [...tiers].sort((a, b) => a.trigger - b.trigger);
+            let appliedTier = null;
+            
+            for (const t of sortedTiers) {
+                if (lowestNav < t.trigger) {
+                    appliedTier = t;
+                    break;
+                }
+            }
+
+            if (appliedTier) {
+                const yearsSinceBase = Math.max(0, currentYear - baseYear);
+                const inflatedTightened = appliedTier.expense * Math.pow(1 + (settings.cola || 0.025), yearsSinceBase);
+                yearData.expenses = inflatedTightened + specialExpenses + overseasExpenses;
+                yearData.isSurvivalTightened = true; 
+                yearData.strategyState = `🚨 Tightened (NAV<${appliedTier.trigger})`;
+            }
         }
     }
 }
