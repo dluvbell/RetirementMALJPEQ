@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.8.1 (Fix: Floating Point Precision Error for MDD Trigger)
+ * @version     18.8.2 (Fix: True Peak Measurement including Reinvestments for MDD)
  * @file        engineCore.js
  * @description Core simulation loop. Integrated Two-Track engine and Total Asset MDD-based survival trigger.
  */
@@ -368,10 +368,13 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
             currentTotalAssets += (a.equity || 0);
         }
 
+        const openingTotal = (yearData.user?.openingBalance || 0) + (yearData.spouse?.openingBalance || 0);
+        const peakToConsider = Math.max(openingTotal, currentTotalAssets);
+
         if (settings.maxTotalAssets === undefined) {
-            settings.maxTotalAssets = currentTotalAssets;
-        } else if (currentTotalAssets > settings.maxTotalAssets) {
-            settings.maxTotalAssets = currentTotalAssets;
+            settings.maxTotalAssets = peakToConsider;
+        } else if (peakToConsider > settings.maxTotalAssets) {
+            settings.maxTotalAssets = peakToConsider;
         }
 
         let maxDrawdown = 0;
