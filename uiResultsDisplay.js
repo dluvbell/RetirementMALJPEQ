@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.5.1 (Fix: Intuitive Column Order Reorganization without Refactoring)
+ * @version     16.5.2 (Feature: Added Dividend Yield and Reinvested Percentage)
  * @file        uiResultsDisplay.js
  * @created     2025-11-09
  * @description Displays results with clean dynamic array columns and restored D3 chart.
@@ -168,7 +168,9 @@ function displaySeparatedDetailedTables(results) {
         { key: 'expTotal', label: lang.colExpenses, prop: 'expenses' },
         { key: 'taxTotal', label: lang.colTaxesPaid, prop: 'taxPayable' },
         { key: 'reinvest', label: 'Reinvested', prop: 'reinvested' },
-        { key: 'wdTotal', label: lang.colWdTotal, prop: 'withdrawals.total' }
+        { key: 'reinvestPct', label: 'Reinvest %' },
+        { key: 'divYield', label: 'Div Yield (%)' },
+        { key: 'wdTotal', label: lang.colWdTotal || 'WD: Total', prop: 'withdrawals.total' }
     ];
 
     const renderTable = (data, title) => {
@@ -179,9 +181,23 @@ function displaySeparatedDetailedTables(results) {
         data.forEach(d => {
             html += `<tr>`;
             cols.forEach(col => {
-                const raw = col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i], d) : d[col.key];
-                let displayVal = (raw || '-');
-                if (typeof raw === 'number' && col.key !== 'userAge') displayVal = formatCurrency(raw);
+                let raw;
+                if (col.key === 'reinvestPct') {
+                    raw = (d.dividends && d.dividends.total > 0) ? (d.reinvested / d.dividends.total) * 100 : 0;
+                } else if (col.key === 'divYield') {
+                    const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
+                    raw = baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
+                } else {
+                    raw = col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i], d) : d[col.key];
+                }
+                
+                let displayVal = (raw !== undefined && raw !== null ? raw : '-');
+                if (typeof raw === 'number' && col.key !== 'userAge') {
+                    if (col.key === 'reinvestPct' || col.key === 'divYield') displayVal = raw.toFixed(1) + '%';
+                    else displayVal = formatCurrency(raw);
+                } else if (!raw && raw !== 0) {
+                    displayVal = '-';
+                }
                 html += `<td>${displayVal}</td>`;
             });
             html += `</tr>`;
@@ -241,6 +257,8 @@ function exportToCsv(results, inputsA, inputsB) {
         { label: "Total Expenses", prop: 'expenses' },
         { label: "Total Taxes", prop: 'taxPayable' },
         { label: "Reinvested", prop: 'reinvested' },
+        { label: "Reinvest %", key: 'reinvestPct' },
+        { label: "Div Yield (%)", key: 'divYield' },
         { label: "WD: Total", prop: 'withdrawals.total' }
     ];
 
@@ -257,17 +275,39 @@ function exportToCsv(results, inputsA, inputsB) {
         
         cols.forEach(col => { 
             if (col.label === 'Age') return;
-            const getVal = (d) => d ? (col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0) : "";
+            const getVal = (d) => {
+                if (!d) return "";
+                if (col.key === 'reinvestPct') return (d.dividends && d.dividends.total > 0) ? (d.reinvested / d.dividends.total) * 100 : 0;
+                if (col.key === 'divYield') {
+                    const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
+                    return baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
+                }
+                return col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0;
+            };
             let vA = getVal(dA);
-            if (typeof vA === 'number') vA = vA.toFixed(0);
+            if (typeof vA === 'number') {
+                if (col.key === 'reinvestPct' || col.key === 'divYield') vA = vA.toFixed(1) + '%';
+                else vA = vA.toFixed(0);
+            }
             row.push(vA);
         });
         
         cols.forEach(col => {
              if (col.label === 'Age') return;
-             const getVal = (d) => d ? (col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0) : "";
+             const getVal = (d) => {
+                if (!d) return "";
+                if (col.key === 'reinvestPct') return (d.dividends && d.dividends.total > 0) ? (d.reinvested / d.dividends.total) * 100 : 0;
+                if (col.key === 'divYield') {
+                    const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
+                    return baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
+                }
+                return col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0;
+             };
              let vB = getVal(dB);
-             if (typeof vB === 'number') vB = vB.toFixed(0);
+             if (typeof vB === 'number') {
+                if (col.key === 'reinvestPct' || col.key === 'divYield') vB = vB.toFixed(1) + '%';
+                else vB = vB.toFixed(0);
+             }
              row.push(vB);
         });
 
