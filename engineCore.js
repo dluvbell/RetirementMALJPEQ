@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.8.0 (Fix: Max Drawdown (MDD) based on Total Assets instead of NAV)
+ * @version     18.8.1 (Fix: Floating Point Precision Error for MDD Trigger)
  * @file        engineCore.js
  * @description Core simulation loop. Integrated Two-Track engine and Total Asset MDD-based survival trigger.
  */
@@ -376,7 +376,8 @@ function step3_CalculateExpenses(yearData, scenario, settings, hasSpouse, spouse
 
         let maxDrawdown = 0;
         if (settings.maxTotalAssets > 0) {
-            maxDrawdown = ((settings.maxTotalAssets - currentTotalAssets) / settings.maxTotalAssets) * 100;
+            let rawDrawdown = ((settings.maxTotalAssets - currentTotalAssets) / settings.maxTotalAssets) * 100;
+            maxDrawdown = Math.round(rawDrawdown * 100) / 100;
         }
         
         if (maxDrawdown > 0) {
