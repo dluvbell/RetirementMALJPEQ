@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     14.0.0 (Feature: Auto-Load & Malaysia Text Updates)
+ * @version     14.0.1 (Fix: Removed unreachable 'else if (typeof string)' inside 'if (typeof function)' in setLanguage)
  * @file        uiCore.js
  * @description Core UI setup. Handles translations (Thai->Malaysia) and triggers auto-load on startup.
  */
@@ -206,12 +206,13 @@ function setLanguage(lang) {
         const translation = translations['en'][key];
         if (translation !== undefined && translation !== null) {
             if (typeof translation === 'function') {
+                // [FIX v14.0.1] Removed dead inner 'else if (typeof translation === "string")' block.
+                // It was unreachable: the outer condition already confirms translation is a function,
+                // so the inner check for 'string' could never be true simultaneously.
+                // Function-type keys that need runtime args (simComplete, mcSubTitle, etc.)
+                // are intentionally skipped here and rendered at call-site with actual values.
                 if (key !== 'simComplete' && key !== 'futureValueDisplay' && key !== 'incomeItemLabel' && key !== 'mcSubTitle') {
                    el.textContent = translation({});
-                } else if (typeof translation === 'string') {
-                    if (key === 'resultsP1' || key === 'resultsP2') { el.innerHTML = translation; }
-                    else if (key === 'createdBy') { if (el.childNodes.length > 0) el.childNodes[0].nodeValue = translation; }
-                    else { el.textContent = translation; }
                 }
             } else if (typeof translation === 'string') {
                 if (key === 'resultsP1' || key === 'resultsP2') { el.innerHTML = translation; }

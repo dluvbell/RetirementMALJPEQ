@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     11.0.3 (Fix: WHT set to 15% for Canada-Malaysia treaty & Malaysian tax set to 0%)
+ * @version     11.0.4 (Fix: Removed dead 'thai_taxable_remittance' reference; fixed arguments[3] to use ownerType directly)
  * @file        incomeTaxEngine.js
  * @created     2025-11-25
  * @description Calculates income and taxes. WHT updated to 15% (Canada-Malaysia Treaty Article 18).
@@ -76,12 +76,11 @@ function step2_CalculateIncome(yearDataRef, personParams, settings, ownerType, c
  */
 function step5_CalculateTaxes(personYearData, fullScenario, settings, ownerType) {
     // [MODIFIED] WHT Rate set to 15% (Canada-Malaysia Tax Treaty Article 18)
-    const whtRate = 0.15; 
-    
-    // Determine birthYear to get currentYear for COLA indexing
-    const owner = arguments[3] || 'user';
+    const whtRate = 0.15;
+
+    // [FIX v11.0.4] Use ownerType parameter directly (removed redundant arguments[3] usage)
     let myBirthYear = fullScenario.user?.birthYear || 1980;
-    if (owner === 'spouse' && fullScenario.spouse) {
+    if (ownerType === 'spouse' && fullScenario.spouse) {
         myBirthYear = fullScenario.spouse.birthYear || myBirthYear;
     }
     
@@ -90,7 +89,7 @@ function step5_CalculateTaxes(personYearData, fullScenario, settings, ownerType)
     const colaMultiplier = Math.pow(1 + settings.cola, yearsSinceBase);
     
     // Ensure Exchange Rate is valid
-    const exchangeRate = Number(settings.exchangeRate) || 3.1; // Default to typical MYR rate
+    const exchangeRate = Number(settings.exchangeRate) || 3.1; // Default to CAD/MYR rate
 
     const inc = personYearData.income;
     const wd = personYearData.withdrawals;
@@ -101,8 +100,9 @@ function step5_CalculateTaxes(personYearData, fullScenario, settings, ownerType)
     const canTax = canTaxBase * whtRate;
 
     // --- 2. Malaysian Tax (Resident - Foreign Source Income) ---
-    // Base = Other Taxable Income (Remitted) + Withdrawals marked as Malaysian Taxable Remittance
-    const malaysianBaseCAD = (inc.other_taxable || 0) + (wd.thai_taxable_remittance || 0);
+    // [FIX v11.0.4] Removed dead 'wd.thai_taxable_remittance' reference (Thailand version leftover).
+    // Malaysian tax base = other_taxable income remitted to Malaysia only.
+    const malaysianBaseCAD = (inc.other_taxable || 0);
     
     // Malaysian Tax (0% on Foreign Income - as of 2025)
     const malaysianTaxCAD = _calculateMalaysianTax(malaysianBaseCAD, exchangeRate, colaMultiplier);

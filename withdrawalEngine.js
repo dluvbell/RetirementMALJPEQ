@@ -1,9 +1,10 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     15.0.0 (JEPQ FIFO Withdrawal Engine)
+ * @version     15.0.1 (Fix: Removed dead 'assets.nonreg' fallback path from old schema)
  * @file        withdrawalEngine.js
  * @description JEPQ 전용 인출 엔진. 복잡한 RRIF/LIF 인출 로직을 소거하고 15% WHT 차감 및 FIFO 방식의 배열 순차 매도 로직만 적용.
+ * @note        JEPQ는 아일랜드 도미사일 구조로 배당 분배 시 이미 세후 수익률 반영. WHT 별도 계산 불필요.
  */
 
 // withdrawalEngine.js
@@ -78,16 +79,10 @@ function step4_PerformWithdrawals(yearData, userAssets, spouseAssets, hasSpouse,
                         totalShortfall -= (take * KEEP_RATE);
                     }
                 }
-            } else if (assets.nonreg && assets.nonreg.equity > 0) {
-                // Fallback (배열이 아닌 단일 객체인 경우)
-                let take = Math.min(grossNeeded, assets.nonreg.equity);
-                assets.nonreg.equity -= take;
-                grossNeeded -= take;
-                wdRecord.jepq_gross_sold += take;
-                wdRecord.wht_deducted += take * WHT_RATE;
-                wdRecord.total += take * KEEP_RATE;
-                totalShortfall -= (take * KEEP_RATE);
             }
+            // [FIX v15.0.1] Removed dead 'assets.nonreg.equity' fallback (old schema leftover).
+            // Current asset structure is always Array<{equity, type, ...}>.
+            // If lots array is empty or assets is null, nothing is sold — depleted flag handles this.
         };
 
         sellJepqLots(userAssets, yearData.user.withdrawals);
@@ -111,7 +106,6 @@ function step4_PerformWithdrawals(yearData, userAssets, spouseAssets, hasSpouse,
             lots.forEach(lot => { total += (lot.equity !== undefined ? lot.equity : (lot.balance !== undefined ? lot.balance : (lot.value || 0))); });
             return total;
         }
-        if (assets.nonreg) return assets.nonreg.equity || 0;
         return 0;
     };
     

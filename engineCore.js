@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     18.8.2 (Fix: True Peak Measurement including Reinvestments for MDD)
+ * @version     18.8.3 (Fix: exchangeRate default corrected from 25.0 (THB) to 3.1 (MYR))
  * @file        engineCore.js
  * @description Core simulation loop. Integrated Two-Track engine and Total Asset MDD-based survival trigger.
  */
@@ -24,7 +24,7 @@ function runFullSimulation(inputsA, inputsB) {
         maxAge: Number(inputsA.lifeExpectancy) || 95,
         cola: getSafeCola(inputsA.cola),
         baseYear: baseYear,
-        exchangeRate: Number(inputsA.exchangeRate) || 25.0,
+        exchangeRate: Number(inputsA.exchangeRate) || 3.1, // [FIX v18.8.3] CAD/MYR default (was 25.0 THB)
         ...getStrategySettings(inputsA)
     };
     const resultsA = simulateScenario(inputsA.scenario, globalSettingsA, "A");
@@ -33,7 +33,7 @@ function runFullSimulation(inputsA, inputsB) {
         maxAge: Number(inputsB.lifeExpectancy) || 95,
         cola: getSafeCola(inputsB.cola),
         baseYear: baseYear,
-        exchangeRate: Number(inputsB.exchangeRate) || 25.0,
+        exchangeRate: Number(inputsB.exchangeRate) || 3.1, // [FIX v18.8.3] CAD/MYR default (was 25.0 THB)
         ...getStrategySettings(inputsB)
     };
     const resultsB = simulateScenario(inputsB.scenario, globalSettingsB, "B");

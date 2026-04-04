@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.4.1 (Fix: Updated UI Labels for Total Asset MDD Drop %)
+ * @version     16.4.2 (Fix: isRestoring setTimeout increased 100ms→500ms; save filename version updated)
  * @file        uiDataHandler.js
  * @description Manages data sync, save/load, and dynamic asset UI binding.
  */
@@ -602,7 +602,7 @@ function handleSaveScenarioClick() {
     const dataToSave = _gatherSaveObj();
     const blob = new Blob([JSON.stringify(dataToSave, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); 
-    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v16_4.json'; 
+    const a = document.createElement('a'); a.href = url; a.download = 'malaysia_retirement_scenario_v18_8.json'; // [FIX v16.4.2] Updated filename version
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -762,7 +762,9 @@ window.loadFromLocalStorage = function() {
             const data = JSON.parse(json);
             isRestoring = true;
             populateUIFromLoadedData(data);
-            setTimeout(() => { isRestoring = false; }, 100);
+            // [FIX v16.4.2] Increased timeout 100ms → 500ms to prevent isRestoring
+            // releasing before DOM population completes on large datasets.
+            setTimeout(() => { isRestoring = false; }, 500);
             console.log("Loaded from LocalStorage");
         }
     } catch(e) {

@@ -1,7 +1,7 @@
 /**
  * @project     Canada-Malaysia Retirement Simulator (Non-Resident)
  * @author      dluvbell (https://github.com/dluvbell)
- * @version     16.5.2 (Feature: Added Dividend Yield and Reinvested Percentage)
+ * @version     16.5.3 (Fix: drawD3Chart implicit global→var; reinvestPct overflow cap; CSV getVal DRY; CSV filename version updated)
  * @file        uiResultsDisplay.js
  * @created     2025-11-09
  * @description Displays results with clean dynamic array columns and restored D3 chart.
@@ -183,7 +183,11 @@ function displaySeparatedDetailedTables(results) {
             cols.forEach(col => {
                 let raw;
                 if (col.key === 'reinvestPct') {
-                    raw = (d.dividends && d.dividends.total > 0) ? (d.reinvested / d.dividends.total) * 100 : 0;
+                    // [FIX v16.5.3] Cap at 9999% to prevent Infinity display when
+                    // reinvested > dividends (e.g. surplus income also reinvested).
+                    raw = (d.dividends && d.dividends.total > 0)
+                        ? Math.min((d.reinvested / d.dividends.total) * 100, 9999)
+                        : 0;
                 } else if (col.key === 'divYield') {
                     const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
                     raw = baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
@@ -268,6 +272,21 @@ function exportToCsv(results, inputsA, inputsB) {
     const resultsB = results.resultsB || [];
     const allAges = [...new Set([...resultsA.map(d=>d.userAge), ...resultsB.map(d=>d.userAge)])].sort((a,b)=>a-b);
 
+    // [FIX v16.5.3] Extracted shared getColVal helper to DRY up duplicate lambda (was defined twice).
+    const getColVal = (d, col) => {
+        if (!d) return "";
+        if (col.key === 'reinvestPct') {
+            return (d.dividends && d.dividends.total > 0)
+                ? Math.min((d.reinvested / d.dividends.total) * 100, 9999)
+                : 0;
+        }
+        if (col.key === 'divYield') {
+            const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
+            return baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
+        }
+        return col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0;
+    };
+
     allAges.forEach(age => {
         const dA = resultsA.find(d => d.userAge === age);
         const dB = resultsB.find(d => d.userAge === age);
@@ -275,16 +294,7 @@ function exportToCsv(results, inputsA, inputsB) {
         
         cols.forEach(col => { 
             if (col.label === 'Age') return;
-            const getVal = (d) => {
-                if (!d) return "";
-                if (col.key === 'reinvestPct') return (d.dividends && d.dividends.total > 0) ? (d.reinvested / d.dividends.total) * 100 : 0;
-                if (col.key === 'divYield') {
-                    const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
-                    return baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
-                }
-                return col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0;
-            };
-            let vA = getVal(dA);
+            let vA = getColVal(dA, col);
             if (typeof vA === 'number') {
                 if (col.key === 'reinvestPct' || col.key === 'divYield') vA = vA.toFixed(1) + '%';
                 else vA = vA.toFixed(0);
@@ -294,16 +304,7 @@ function exportToCsv(results, inputsA, inputsB) {
         
         cols.forEach(col => {
              if (col.label === 'Age') return;
-             const getVal = (d) => {
-                if (!d) return "";
-                if (col.key === 'reinvestPct') return (d.dividends && d.dividends.total > 0) ? (d.reinvested / d.dividends.total) * 100 : 0;
-                if (col.key === 'divYield') {
-                    const baseAssets = (d.assetsSplit?.total || 0) - (d.reinvested || 0) + (d.withdrawals?.total || 0);
-                    return baseAssets > 0 ? ((d.dividends?.total || 0) / baseAssets) * 100 : 0;
-                }
-                return col.prop ? col.prop.split('.').reduce((o,i)=>o?.[i],d) : 0;
-             };
-             let vB = getVal(dB);
+             let vB = getColVal(dB, col);
              if (typeof vB === 'number') {
                 if (col.key === 'reinvestPct' || col.key === 'divYield') vB = vB.toFixed(1) + '%';
                 else vB = vB.toFixed(0);
@@ -317,7 +318,7 @@ function exportToCsv(results, inputsA, inputsB) {
     const encodedUri = encodeURI(csv);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "malaysia_retirement_simulation_v14_4.csv"); 
+    link.setAttribute("download", "malaysia_retirement_simulation_v16_5.csv"); // [FIX v16.5.3] Updated filename version
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -328,7 +329,9 @@ function clearD3Chart() {
     d3.select('body').select('.d3-tooltip').remove();
 }
 
-drawD3Chart = function(results) {
+// [FIX v16.5.3] Changed from implicit global assignment (drawD3Chart = function...)
+// to explicit var declaration to prevent accidental global pollution.
+var drawD3Chart = function(results) {
     if (typeof d3 === 'undefined' || !elements.results_chart || !elements.graph_container) return;
     d3.select(elements.results_chart).selectAll("*").remove();
     d3.select('body').select('.d3-tooltip').remove();
